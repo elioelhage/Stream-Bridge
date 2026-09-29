@@ -1,38 +1,32 @@
 # Stream Bridge
 
-Stream Bridge is a browser extension prototype that keeps Twitch as the primary viewing experience and temporarily switches to a creator's YouTube live video when Twitch enters an ad break.
+Stream Bridge is a browser extension prototype focused on reliable Twitch ad detection and an immediate on-page alert.
 
-## v0.3.0
+## v0.5.0
 
-Version 0.4 keeps the exact YouTube video URL approach and fixes the backup preparation false-failure caused by waiting for YouTube to finish loading.
+This version deliberately puts the YouTube backup system on hold. The current goal is to prove that Stream Bridge can detect an ad and immediately surface a clean visual signal inside Twitch.
 
-### What changed
+### Current behavior
 
-- **Exact YouTube backup URL:** paste the live video's YouTube watch link (or a YouTube `/live/<id>` link). Stream Bridge opens that exact video instead of guessing a channel URL.
-- **No channel-page fallback:** Stream Bridge no longer constructs `https://youtube.com/@name/live` and never intentionally sends the viewer to the creator's ordinary channel page.
-- **Duplicate-tab fix:** backup preparation is serialized per Twitch tab, preventing concurrent Twitch events from creating multiple YouTube tabs.
-- **Manual-close protection:** if the backup tab is manually closed while the extension is switched over, Stream Bridge will not recreate it repeatedly during that same ad. Use **Prepare backup** to explicitly reopen it.
-- **Persistent state:** the Twitch → backup tab association remains stored in extension storage.
-- **Test mode remains:** **Simulate ad** and **Return to Twitch** exercise the same switching/return logic used by real ad events.
+- Detects Twitch ad-state signals through the existing HLS/player observation mechanism.
+- Shows an instant Stream Bridge alert overlay on the Twitch page when an ad is detected.
+- Test mode uses the same in-page alert path and keeps the simulated alert visible for **12 seconds**.
+- There is no automatic YouTube tab creation, preparation, or switching in v0.5.
+- The popup is redesigned as a compact dark interface with Stream Bridge branding, status information, and an inline bridge icon.
 
-## Setup
+### Test procedure
 
-1. Open `chrome://extensions/`.
-2. Enable Developer mode.
-3. Choose **Load unpacked** and select this repository directory.
-4. Open the Twitch stream you want to watch.
-5. Open Stream Bridge. The Twitch channel is detected from the current Twitch tab when possible.
-6. Paste the **current YouTube live video URL** into the backup field.
-7. Click **Save**, then **Prepare backup**.
-8. Once the popup says **Backup ready**, click **Simulate ad**.
-9. The YouTube tab should become active. Reopen the extension popup and click **Return to Twitch**.
+1. Reload the extension from `chrome://extensions/`.
+2. Open a Twitch livestream.
+3. Open Stream Bridge and make sure detection is enabled.
+4. Click **Simulate ad**.
+5. A Stream Bridge alert should appear immediately in the Twitch page and remain visible for 12 seconds.
+6. The alert disappears automatically; there is no return button.
 
-## Real ad detection
+### Architecture
 
-The detector observes Twitch's HLS `.m3u8` player traffic for the useful `stitched` / `MIDROLL` ad-state markers identified from the reference blocker supplied for this project. Stream Bridge does not strip or rewrite ad segments.
+The background service-worker/backup-tab path is intentionally removed from the active extension architecture for this milestone. The Twitch content script receives real detector events directly and displays the alert immediately.
 
-## Limitations of v0.3
+### Next stage
 
-- The backup URL is an exact video URL. When a creator starts a new live broadcast with a different video ID, the saved URL must be updated.
-- Browser autoplay policy can affect whether the prepared YouTube player starts with sound.
-- Twitch can change its player implementation or HLS markers, so the detector remains isolated for replacement.
+Once detection is proven reliable, the YouTube backup system can be reintroduced separately, without mixing it into the ad-detection debugging work.
