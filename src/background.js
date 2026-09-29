@@ -157,18 +157,35 @@ async function switchToYoutube(twitchTabId) {
   if (state?.switched) return { ok: true, action: 'already-on-youtube' };
   if (state?.manuallyClosed) return { ok: false, reason: 'youtube-tab-closed' };
 
-  const youtubeTab = await ensureYoutubeTab(twitchTab);
-  if (!youtubeTab?.id) return { ok: false, reason: 'invalid-youtube-video-url' };
-
   state = tabState.get(twitchTabId) || {};
+  if (typeof state.twitchWasMuted !== 'boolean') {
+    state.twitchWasMuted = Boolean(twitchTab.mutedInfo?.muted);
+  }
+
+  // Mute Twitch before opening/focusing YouTube so ad audio cannot leak through.
+  await chrome.tabs.update(twitchTab.id, { muted: true }).catch(() => {});
+  state.switched = false;
+  state.manuallyClosed = false;
+  tabState.set(twitchTabId, state);
+  await persistState();
+
+  const youtubeTab = await ensureYoutubeTab(twitchTab);
+  if (!youtubeTab?.id) {
+    if (!state.twitchWasMuted) {
+      await chrome.tabs.update(twitchTab.id, { muted: false }).catch(() => {});
+    }
+    state.twitchWasMuted = false;
+    tabState.set(twitchTabId, state);
+    await persistState();
+    return { ok: false, reason: 'invalid-youtube-video-url' };
+  }
+
   state.youtubeTabId = youtubeTab.id;
-  state.twitchWasMuted = Boolean(twitchTab.mutedInfo?.muted);
   state.switched = true;
   state.manuallyClosed = false;
   tabState.set(twitchTabId, state);
   await persistState();
 
-  await chrome.tabs.update(twitchTab.id, { muted: true }).catch(() => {});
   return { ok: true, action: 'switched-to-youtube' };
 }
 
