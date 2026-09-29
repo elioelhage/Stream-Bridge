@@ -1,6 +1,6 @@
 (() => {
-  if (window.__streamSwitchDetectorInstalled) return;
-  window.__streamSwitchDetectorInstalled = true;
+  if (window.__streamBridgeDetectorInstalled) return;
+  window.__streamBridgeDetectorInstalled = true;
 
   const HLS_PATTERN = /\.m3u8(?:[?#]|$)/i;
   const AD_MARKERS = [
@@ -20,7 +20,7 @@
     state.active = active;
 
     window.postMessage({
-      source: 'streamswitch',
+      source: 'streambridge',
       type: 'twitch-ad-state',
       active,
       sourceType: source,
@@ -42,6 +42,7 @@
     if (typeof text !== 'string' || !HLS_PATTERN.test(url)) return;
 
     const isAd = AD_MARKERS.some((marker) => marker.test(text));
+
     if (isAd) {
       state.lastAdPlaylistAt = Date.now();
       clearTimeout(state.clearTimer);
@@ -63,7 +64,7 @@
 
   try {
     const nativeFetch = window.fetch;
-    window.fetch = function streamswitchFetch(input, init, ...rest) {
+    window.fetch = function streamBridgeFetch(input, init, ...rest) {
       const url = getUrl(input);
       const responsePromise = nativeFetch.call(this, input, init, ...rest);
 
@@ -88,32 +89,18 @@
         '  const nativeFetch = self.fetch;',
         '  const hlsPattern = /\\.m3u8(?:[?#]|$)/i;',
         '  const adMarkers = [/\\bstitched\\b/i, /"MIDROLL"/i, /"midroll"/i];',
-        '',
         '  function inspect(url, text) {',
         '    if (typeof text !== "string" || !hlsPattern.test(url)) return;',
         '    const active = adMarkers.some((marker) => marker.test(text));',
-        '    self.postMessage({',
-        '      __streamSwitch: true,',
-        '      type: "twitch-ad-state",',
-        '      active,',
-        '      sourceType: "worker-hls",',
-        '      url,',
-        '      timestamp: Date.now()',
-        '    });',
+        '    self.postMessage({ __streamBridge: true, type: "twitch-ad-state", active, sourceType: "worker-hls", url, timestamp: Date.now() });',
         '  }',
-        '',
-        '  self.fetch = function streamswitchWorkerFetch(input, init, ...rest) {',
+        '  self.fetch = function streamBridgeWorkerFetch(input, init, ...rest) {',
         '    let url = "";',
-        '    try {',
-        '      url = typeof input === "string" ? new URL(input, self.location.href).href : input?.url || "";',
-        '    } catch {}',
-        '',
+        '    try { url = typeof input === "string" ? new URL(input, self.location.href).href : input?.url || ""; } catch {}',
         '    const responsePromise = nativeFetch.call(this, input, init, ...rest);',
         '    if (hlsPattern.test(url)) {',
         '      responsePromise.then((response) => {',
-        '        try {',
-        '          response.clone().text().then((text) => inspect(url, text)).catch(() => {});',
-        '        } catch {}',
+        '        try { response.clone().text().then((text) => inspect(url, text)).catch(() => {}); } catch {}',
         '      }).catch(() => {});',
         '    }',
         '    return responsePromise;',
@@ -136,9 +123,7 @@
           isTwitchWorker = parsed.origin.endsWith('.twitch.tv') || parsed.origin === 'https://www.twitch.tv';
         } catch {}
 
-        if (!isTwitchWorker) {
-          return Reflect.construct(Target, args, NewTarget);
-        }
+        if (!isTwitchWorker) return Reflect.construct(Target, args, NewTarget);
 
         const isModuleWorker = args?.[1]?.type === 'module';
         const wrappedUrl = buildWorkerUrl(new URL(originalUrl, location.href).href, isModuleWorker);
@@ -146,10 +131,10 @@
 
         worker.addEventListener('message', (event) => {
           const data = event?.data;
-          if (!data?.__streamSwitch) return;
+          if (!data?.__streamBridge) return;
 
           window.postMessage({
-            source: 'streamswitch',
+            source: 'streambridge',
             type: data.type,
             active: Boolean(data.active),
             sourceType: data.sourceType,
@@ -161,17 +146,5 @@
         return worker;
       }
     });
-  } catch {}
-
-  try {
-    const observer = new MutationObserver(() => {
-      const bodyText = document.body?.innerText || '';
-      const hasExplicitCountdown = /(?:advertisement|ad)\s*(?:\(|:)?\s*\d{1,2}:\d{2}/i.test(bodyText);
-      if (hasExplicitCountdown) {
-        emit(true, 'dom', location.href);
-      }
-    });
-
-    observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
   } catch {}
 })();
