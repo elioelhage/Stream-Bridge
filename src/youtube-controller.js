@@ -106,6 +106,25 @@
       return false;
     }
 
+    if (message?.type === 'streambridge-go-live') {
+      const goLive = () => {
+        const video = getVideo();
+        if (!video || !classifyVideo()) return;
+        try {
+          const end = video.seekable?.length ? video.seekable.end(video.seekable.length - 1) : NaN;
+          if (Number.isFinite(end)) {
+            video.currentTime = end;
+          }
+        } catch {}
+      };
+
+      goLive();
+      setTimeout(goLive, 500);
+      setTimeout(goLive, 1500);
+      sendResponse({ ok: true });
+      return false;
+    }
+
     if (message?.type === 'streambridge-init-youtube') {
       seekWhenReady(Number(message.resumeTime));
       sendResponse({ ok: true });
