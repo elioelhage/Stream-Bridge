@@ -142,3 +142,34 @@ button.primary {
 .switch input:checked + span::before {
   transform: translateX(18px);
 }
+
+.test-panel {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid #27272a;
+}
+
+.test-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+#testState {
+  color: #a1a1aa;
+  font-weight: 400;
+}
+
+.test-panel p {
+  color: #71717a;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 6px 0 10px;
+}
+
+em {
+  color: #71717a;
+  font-style: normal;
+  font-weight: 400;
+}
