@@ -7,66 +7,37 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <main class="shell">
-    <header class="hero">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M3.5 17.5h17M6 17.5v-5.5M18 17.5v-5.5M4.5 12h15M7 12l2.5-5.5h5L17 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M10 8.5h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div>
-          <h1>Stream Bridge</h1>
-          <p>Smart Twitch ad detection</p>
-        </div>
+  <main>
+    <header>
+      <div>
+        <h1>Stream Bridge</h1>
+        <p id="status">Loading…</p>
       </div>
-
-      <label class="switch" aria-label="Enable Stream Bridge">
-        <input id="enabled" type="checkbox">
-        <span class="slider"></span>
-      </label>
     </header>
 
-    <section class="card">
-      <div class="section-label">ACTIVE STREAM</div>
+    <label>
+      <span>Twitch streamer</span>
+      <input id="twitchChannel" type="text" placeholder="Open a Twitch stream" readonly>
+    </label>
 
-      <label class="field">
-        <span>Twitch streamer</span>
-        <input id="twitchChannel" type="text" placeholder="xqc" autocomplete="off">
-      </label>
+    <label>
+      <span>YouTube live stream</span>
+      <input id="youtubeVideoUrl" type="url" placeholder="https://www.youtube.com/watch?v=…">
+    </label>
 
-      <div class="status-row">
-        <span class="dot"></span>
-        <span id="status">Ready to detect ads</span>
+    <div class="actions">
+      <button id="save" class="primary">Save</button>
+    </div>
+
+    <section class="test-panel">
+      <strong>Test</strong>
+      <p>Simulates a 12-second ad. The YouTube stream opens in a separate tab and closes automatically when the test ends.</p>
+      <div class="actions">
+        <button id="simulateStart">Simulate ad</button>
       </div>
     </section>
 
-    <section class="card test-card">
-      <div class="section-header">
-        <div>
-          <div class="section-label">TEST MODE</div>
-          <h2>Test ad detection</h2>
-        </div>
-        <span class="pill">12 SEC</span>
-      </div>
-
-      <p class="description">Triggers the same in-page alert used by a real Twitch ad, but lasts 12 seconds so you can inspect it.</p>
-
-      <button id="simulateStart" class="primary-button">
-        <span class="button-icon">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="m9 6 9 6-9 6V6Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        Simulate ad
-      </button>
-    </section>
-
-    <footer>
-      <span>Stream Bridge</span>
-      <span>v0.5.0</span>
-    </footer>
+    <p class="note">The Twitch tab stays open while the temporary YouTube tab is used during the ad.</p>
   </main>
   <script src="popup.js"></script>
 </body>
