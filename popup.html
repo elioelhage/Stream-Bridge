@@ -13,20 +13,20 @@
         <h1>StreamSwitch</h1>
         <p id="status">Loading…</p>
       </div>
-      <label class="switch">
+      <label class="switch" aria-label="Enable StreamSwitch">
         <input id="enabled" type="checkbox">
         <span></span>
       </label>
     </header>
 
     <label>
-      <span>Twitch channel</span>
+      <span>Twitch streamer</span>
       <input id="twitchChannel" type="text" placeholder="xqc">
     </label>
 
     <label>
-      <span>YouTube backup channel</span>
-      <input id="youtubeChannel" type="text" placeholder="https://youtube.com/@channel">
+      <span>YouTube handle <em>(defaults to Twitch name)</em></span>
+      <input id="youtubeChannel" type="text" placeholder="@xqc">
     </label>
 
     <label class="checkbox-row">
@@ -39,7 +39,19 @@
       <button id="save" class="primary">Save</button>
     </div>
 
-    <p class="note">v0.1 observes Twitch's player state and switches tabs. It does not block or alter the Twitch ad stream.</p>
+    <section class="test-panel">
+      <div class="test-heading">
+        <strong>Test mode</strong>
+        <span id="testState">Idle</span>
+      </div>
+      <p>Use this to test switching without waiting for a real Twitch ad.</p>
+      <div class="actions">
+        <button id="simulateStart">Simulate ad</button>
+        <button id="simulateEnd">Return to Twitch</button>
+      </div>
+    </section>
+
+    <p class="note">v0.2 observes Twitch's player state and switches tabs. Test mode uses the same switching path as a real ad signal.</p>
   </main>
   <script src="popup.js"></script>
 </body>
