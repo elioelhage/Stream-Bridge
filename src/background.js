@@ -1,12 +1,13 @@
 const DEFAULTS = {
   enabled: true,
   twitchChannel: '',
-  youtubeChannel: '',
+  youtubeVideoUrl: '',
   closeBackupAfterReturn: false
 };
 
 const STATE_KEY = 'streamSwitchTabState';
 const tabState = new Map();
+const preparationLocks = new Map();
 
 async function getSettings() {
   return chrome.storage.local.get(DEFAULTS);
@@ -14,20 +15,15 @@ async function getSettings() {
 
 async function persistState() {
   const serializable = {};
-  for (const [twitchTabId, state] of tabState) {
-    serializable[twitchTabId] = state;
-  }
+  for (const [twitchTabId, state] of tabState) serializable[twitchTabId] = state;
   await chrome.storage.local.set({ [STATE_KEY]: serializable });
 }
 
 async function restoreState() {
   const stored = await chrome.storage.local.get({ [STATE_KEY]: {} });
-  const stateObject = stored[STATE_KEY] || {};
-  for (const [key, value] of Object.entries(stateObject)) {
+  for (const [key, value] of Object.entries(stored[STATE_KEY] || {})) {
     const twitchTabId = Number(key);
-    if (Number.isInteger(twitchTabId) && value && typeof value === 'object') {
-      tabState.set(twitchTabId, value);
-    }
+    if (Number.isInteger(twitchTabId) && value && typeof value === 'object') tabState.set(twitchTabId, value);
   }
 }
 
@@ -41,41 +37,28 @@ function normalizeChannel(value) {
     .toLowerCase();
 }
 
-function normalizeYoutubeHandle(value) {
+function normalizeYoutubeVideoUrl(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
   try {
     const url = new URL(raw);
-    if (!['www.youtube.com', 'youtube.com'].includes(url.hostname)) return '';
-    const match = url.pathname.match(/^\/@([^/]+)/i);
-    if (match) return match[1];
-    const channelMatch = url.pathname.match(/^\/channel\/([^/]+)/i);
-    if (channelMatch) return channelMatch[1];
-    const customMatch = url.pathname.match(/^\/c\/([^/]+)/i);
-    if (customMatch) return customMatch[1];
+    const host = url.hostname.toLowerCase();
+    if (!['www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be'].includes(host)) return '';
+
+    if (host === 'youtu.be') {
+      const id = url.pathname.replace(/^\/+/, '').split(/[/?#]/, 1)[0];
+      return id ? `https://www.youtube.com/watch?v=${encodeURIComponent(id)}` : '';
+    }
+
+    if (url.pathname === '/watch' && url.searchParams.get('v')) {
+      return `https://www.youtube.com/watch?v=${encodeURIComponent(url.searchParams.get('v'))}`;
+    }
+
+    if (/^\/live\//i.test(url.pathname)) return `https://www.youtube.com${url.pathname}`;
     return '';
   } catch {
-    return raw.replace(/^@/, '').replace(/^\/+|\/+$/g, '').split(/[/?#]/, 1)[0];
-  }
-}
-
-function buildYoutubeLiveUrl(youtubeValue, twitchChannel) {
-  const explicit = normalizeYoutubeHandle(youtubeValue);
-  const fallback = normalizeChannel(twitchChannel);
-  const handle = explicit || fallback;
-  if (!handle) return '';
-
-  return `https://www.youtube.com/@${encodeURIComponent(handle)}/live`;
-}
-
-function isLikelyYoutubeLiveUrl(url) {
-  try {
-    const parsed = new URL(url);
-    if (!['www.youtube.com', 'youtube.com'].includes(parsed.hostname)) return false;
-    return parsed.pathname.startsWith('/watch') || /^\/live\//i.test(parsed.pathname);
-  } catch {
-    return false;
+    return '';
   }
 }
 
@@ -89,6 +72,8 @@ async function findExistingBackupTab(twitchTabId) {
   } catch {}
 
   state.backupTabId = null;
+  state.backupReady = false;
+  tabState.set(twitchTabId, state);
   await persistState();
   return null;
 }
@@ -99,86 +84,106 @@ async function waitForYoutubeNavigation(tabId, timeoutMs = 10000) {
   while (Date.now() - startedAt < timeoutMs) {
     try {
       const tab = await chrome.tabs.get(tabId);
-      if (tab.status === 'complete' && isLikelyYoutubeLiveUrl(tab.url || '')) return tab;
-      if (tab.url && !tab.url.includes('/live')) return tab;
+      if (tab.status === 'complete') return tab;
     } catch {
       return null;
     }
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 250));
   }
 
-  try {
-    return await chrome.tabs.get(tabId);
-  } catch {
-    return null;
-  }
+  try { return await chrome.tabs.get(tabId); } catch { return null; }
 }
 
-async function ensureBackupTab(twitchTab) {
-  const settings = await getSettings();
-  const target = buildYoutubeLiveUrl(settings.youtubeChannel, settings.twitchChannel);
-  if (!target) return null;
+async function ensureBackupTab(twitchTab, { force = false } = {}) {
+  if (!twitchTab?.id) return null;
 
-  const state = tabState.get(twitchTab.id) || {
-    switched: false,
-    backupTabId: null,
-    preparedUrl: '',
-    closeBackupAfterReturn: Boolean(settings.closeBackupAfterReturn)
-  };
+  const existingLock = preparationLocks.get(twitchTab.id);
+  if (existingLock) return existingLock;
 
-  let backup = await findExistingBackupTab(twitchTab.id);
+  const preparation = (async () => {
+    const settings = await getSettings();
+    const target = normalizeYoutubeVideoUrl(settings.youtubeVideoUrl);
+    if (!target) return null;
 
-  if (!backup) {
-    backup = await chrome.tabs.create({
-      url: target,
-      active: false,
-      windowId: twitchTab.windowId,
-      index: typeof twitchTab.index === 'number' ? twitchTab.index + 1 : undefined
-    });
-    state.backupTabId = backup.id;
-    state.preparedUrl = target;
-    tabState.set(twitchTab.id, state);
-    await persistState();
-  } else if (state.preparedUrl !== target && backup.url !== target) {
-    await chrome.tabs.update(backup.id, { url: target, active: false });
-    state.preparedUrl = target;
-    tabState.set(twitchTab.id, state);
-    await persistState();
-  }
+    let state = tabState.get(twitchTab.id);
+    if (!state) {
+      state = {
+        switched: false,
+        backupTabId: null,
+        preparedUrl: '',
+        backupUrl: '',
+        backupReady: false,
+        backupClosedByUser: false,
+        closeBackupAfterReturn: Boolean(settings.closeBackupAfterReturn),
+        lastEventWasSimulated: false
+      };
+      tabState.set(twitchTab.id, state);
+    }
 
-  const settled = await waitForYoutubeNavigation(backup.id);
-  if (settled?.id === backup.id) {
+    if (state.backupClosedByUser && state.switched && !force) return null;
+
+    let backup = await findExistingBackupTab(twitchTab.id);
+
+    if (!backup) {
+      backup = await chrome.tabs.create({
+        url: target,
+        active: false,
+        windowId: twitchTab.windowId,
+        index: typeof twitchTab.index === 'number' ? twitchTab.index + 1 : undefined
+      });
+
+      state.backupTabId = backup.id;
+      state.preparedUrl = target;
+      state.backupReady = false;
+      state.backupClosedByUser = false;
+      tabState.set(twitchTab.id, state);
+      await persistState();
+    } else if (state.preparedUrl !== target || backup.url !== target) {
+      await chrome.tabs.update(backup.id, { url: target, active: false });
+      state.preparedUrl = target;
+      state.backupReady = false;
+      state.backupClosedByUser = false;
+      tabState.set(twitchTab.id, state);
+      await persistState();
+    }
+
+    const settled = await waitForYoutubeNavigation(backup.id);
+    if (!settled?.id) return null;
+
     state.backupUrl = settled.url || target;
-    state.backupReady = isLikelyYoutubeLiveUrl(settled.url || '');
+    state.backupReady = settled.status === 'complete';
+    state.backupClosedByUser = false;
     tabState.set(twitchTab.id, state);
     await persistState();
-  }
 
-  return backup;
+    return backup;
+  })();
+
+  preparationLocks.set(twitchTab.id, preparation);
+  try { return await preparation; }
+  finally { preparationLocks.delete(twitchTab.id); }
 }
 
 async function activateBackup(twitchTabId) {
   let twitchTab;
-  try {
-    twitchTab = await chrome.tabs.get(twitchTabId);
-  } catch {
-    return false;
-  }
+  try { twitchTab = await chrome.tabs.get(twitchTabId); } catch { return false; }
+
+  const state = tabState.get(twitchTabId);
+  if (state?.backupClosedByUser && state.switched) return false;
 
   const backup = await ensureBackupTab(twitchTab);
-  const state = tabState.get(twitchTabId) || {};
-  if (!backup?.id || !state.backupReady) return false;
+  const currentState = tabState.get(twitchTabId) || {};
+  if (!backup?.id || !currentState.backupReady) return false;
 
   try {
     await chrome.windows.update(twitchTab.windowId, { focused: true });
     await chrome.tabs.update(backup.id, { active: true });
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 
-  state.backupTabId = backup.id;
-  state.switched = true;
-  tabState.set(twitchTabId, state);
+  currentState.backupTabId = backup.id;
+  currentState.switched = true;
+  currentState.backupClosedByUser = false;
+  tabState.set(twitchTabId, currentState);
   await persistState();
   return true;
 }
@@ -194,23 +199,18 @@ async function returnToTwitch(twitchTabId) {
   } catch {}
 
   if (state.closeBackupAfterReturn && state.backupTabId) {
-    try {
-      await chrome.tabs.remove(state.backupTabId);
-      state.backupTabId = null;
-    } catch {}
+    try { await chrome.tabs.remove(state.backupTabId); state.backupTabId = null; } catch {}
   }
 
   state.switched = false;
+  state.backupClosedByUser = false;
   tabState.set(twitchTabId, state);
   await persistState();
 }
 
 function getCurrentChannelFromTab(tab) {
-  try {
-    return normalizeChannel(new URL(tab.url || '').pathname);
-  } catch {
-    return '';
-  }
+  try { return normalizeChannel(new URL(tab.url || '').pathname); }
+  catch { return ''; }
 }
 
 async function handleAdState({ tab, active, simulated = false }) {
@@ -219,17 +219,21 @@ async function handleAdState({ tab, active, simulated = false }) {
 
   const currentChannel = getCurrentChannelFromTab(tab);
   const configuredChannel = normalizeChannel(settings.twitchChannel);
-  if (!configuredChannel || currentChannel !== configuredChannel) {
-    return { ok: false, reason: 'channel-mismatch' };
-  }
+  if (!configuredChannel || currentChannel !== configuredChannel) return { ok: false, reason: 'channel-mismatch' };
 
-  const state = tabState.get(tab.id) || {
-    switched: false,
-    backupTabId: null,
-    preparedUrl: '',
-    closeBackupAfterReturn: Boolean(settings.closeBackupAfterReturn),
-    lastEventWasSimulated: false
-  };
+  let state = tabState.get(tab.id);
+  if (!state) {
+    state = {
+      switched: false,
+      backupTabId: null,
+      preparedUrl: '',
+      backupUrl: '',
+      backupReady: false,
+      backupClosedByUser: false,
+      closeBackupAfterReturn: Boolean(settings.closeBackupAfterReturn),
+      lastEventWasSimulated: false
+    };
+  }
 
   state.closeBackupAfterReturn = Boolean(settings.closeBackupAfterReturn);
   state.lastEventWasSimulated = simulated;
@@ -237,6 +241,7 @@ async function handleAdState({ tab, active, simulated = false }) {
   await persistState();
 
   if (active && !state.switched) {
+    if (state.backupClosedByUser) return { ok: false, reason: 'backup-closed-during-current-ad' };
     const switched = await activateBackup(tab.id);
     return { ok: switched, action: switched ? 'switched-to-backup' : 'backup-not-ready' };
   }
@@ -251,11 +256,8 @@ async function handleAdState({ tab, active, simulated = false }) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'twitch-ad-state') {
-    handleAdState({
-      tab: sender.tab,
-      active: Boolean(message.active),
-      simulated: false
-    }).then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'error' }));
+    handleAdState({ tab: sender.tab, active: Boolean(message.active), simulated: false })
+      .then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'error' }));
     return true;
   }
 
@@ -263,8 +265,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       if (!sender.tab?.id) return { ok: false, reason: 'no-tab' };
       const settings = await getSettings();
-      const target = buildYoutubeLiveUrl(settings.youtubeChannel, settings.twitchChannel);
-      const backup = await ensureBackupTab(sender.tab);
+      const target = normalizeYoutubeVideoUrl(settings.youtubeVideoUrl);
+      if (!target) return { ok: false, reason: 'invalid-youtube-video-url' };
+
+      const backup = await ensureBackupTab(sender.tab, { force: true });
       const state = tabState.get(sender.tab.id) || {};
       return {
         ok: Boolean(backup?.id && state.backupReady),
@@ -286,7 +290,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === 'end-simulated-ad') {
     (async () => {
-      const switchedEntry = [...tabState.entries()].find(([, state]) => state?.switched);
+      const switchedEntry = [...tabState.entries()].find(([, state]) => state?.switched && state?.lastEventWasSimulated);
       if (!switchedEntry) return { ok: false, reason: 'no-simulated-switch-active' };
 
       const [twitchTabId] = switchedEntry;
@@ -303,10 +307,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'get-state') {
     (async () => {
       const settings = await getSettings();
-      return {
-        settings,
-        tabState: sender.tab?.id ? tabState.get(sender.tab.id) || null : null
-      };
+      return { settings, tabState: sender.tab?.id ? tabState.get(sender.tab.id) || null : null };
     })().then(sendResponse).catch(() => sendResponse({ settings: DEFAULTS, tabState: null }));
     return true;
   }
@@ -314,14 +315,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   let changed = false;
-  if (tabState.delete(tabId)) changed = true;
-  for (const state of tabState.values()) {
+
+  for (const [twitchTabId, state] of tabState.entries()) {
+    if (twitchTabId === tabId) {
+      tabState.delete(tabId);
+      changed = true;
+      continue;
+    }
+
     if (state.backupTabId === tabId) {
       state.backupTabId = null;
       state.backupReady = false;
+      state.backupClosedByUser = true;
+      tabState.set(twitchTabId, state);
       changed = true;
     }
   }
+
   if (changed) persistState().catch(() => {});
 });
 
