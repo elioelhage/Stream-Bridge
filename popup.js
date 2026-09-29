@@ -1,61 +1,40 @@
 const DEFAULTS = {
   enabled: true,
   twitchChannel: '',
-  youtubeChannel: '',
+  youtubeVideoUrl: '',
   closeBackupAfterReturn: false
 };
 
 const $ = (id) => document.getElementById(id);
-let activeTab = null;
 
-function deriveYoutubeDefault(twitchChannel) {
-  const value = String(twitchChannel || '').trim().replace(/^@/, '');
-  return value ? `@${value}` : '';
-}
-
-async function getActiveTwitchTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id || !tab.url?.startsWith('https://www.twitch.tv/')) return null;
-  return tab;
+function getActiveTwitchTab() {
+  return chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+    if (!tab?.id || !tab.url?.startsWith('https://www.twitch.tv/')) return null;
+    return tab;
+  });
 }
 
 async function load() {
   const settings = await chrome.storage.local.get(DEFAULTS);
   $('enabled').checked = Boolean(settings.enabled);
   $('twitchChannel').value = settings.twitchChannel || '';
-  $('youtubeChannel').value = settings.youtubeChannel || '';
+  $('youtubeVideoUrl').value = settings.youtubeVideoUrl || '';
   $('closeBackupAfterReturn').checked = Boolean(settings.closeBackupAfterReturn);
 
-  activeTab = await getActiveTwitchTab();
-  if (activeTab) {
+  const activeTab = await getActiveTwitchTab();
+  if (activeTab && !$('twitchChannel').value) {
     const currentChannel = new URL(activeTab.url).pathname.split('/').filter(Boolean)[0]?.split('?')[0] || '';
-    if (currentChannel && !$('twitchChannel').value) {
-      $('twitchChannel').value = currentChannel;
-    }
-  }
-
-  if (!$('youtubeChannel').value && $('twitchChannel').value) {
-    $('youtubeChannel').value = deriveYoutubeDefault($('twitchChannel').value);
+    if (currentChannel) $('twitchChannel').value = currentChannel;
   }
 
   $('status').textContent = settings.enabled ? 'Ready' : 'Disabled';
 }
 
-$('twitchChannel').addEventListener('input', () => {
-  if (!$('youtubeChannel').dataset.userEdited) {
-    $('youtubeChannel').value = deriveYoutubeDefault($('twitchChannel').value);
-  }
-});
-
-$('youtubeChannel').addEventListener('input', () => {
-  $('youtubeChannel').dataset.userEdited = 'true';
-});
-
 $('save').addEventListener('click', async () => {
   await chrome.storage.local.set({
     enabled: $('enabled').checked,
     twitchChannel: $('twitchChannel').value.trim(),
-    youtubeChannel: $('youtubeChannel').value.trim(),
+    youtubeVideoUrl: $('youtubeVideoUrl').value.trim(),
     closeBackupAfterReturn: $('closeBackupAfterReturn').checked
   });
   $('status').textContent = 'Saved';
@@ -67,7 +46,7 @@ $('enabled').addEventListener('change', async () => {
 });
 
 $('prepare').addEventListener('click', async () => {
-  activeTab = await getActiveTwitchTab();
+  const activeTab = await getActiveTwitchTab();
   if (!activeTab) {
     $('status').textContent = 'Open the Twitch stream first';
     return;
@@ -75,7 +54,7 @@ $('prepare').addEventListener('click', async () => {
 
   await chrome.storage.local.set({
     twitchChannel: $('twitchChannel').value.trim(),
-    youtubeChannel: $('youtubeChannel').value.trim()
+    youtubeVideoUrl: $('youtubeVideoUrl').value.trim()
   });
 
   const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'ping-streamswitch' }).catch(() => null);
@@ -87,27 +66,23 @@ $('prepare').addEventListener('click', async () => {
   const result = await chrome.runtime.sendMessage({ type: 'prepare-backup' });
   if (result?.ok) {
     $('status').textContent = 'Backup ready';
-  } else if (result?.url) {
-    $('status').textContent = 'No live YouTube stream found';
+  } else if (result?.reason === 'invalid-youtube-video-url') {
+    $('status').textContent = 'Enter a YouTube video link';
   } else {
     $('status').textContent = 'Could not prepare backup';
   }
 });
 
 $('simulateStart').addEventListener('click', async () => {
-  activeTab = await getActiveTwitchTab();
+  const activeTab = await getActiveTwitchTab();
   if (!activeTab) {
     $('testState').textContent = 'Open Twitch first';
     return;
   }
 
   const result = await chrome.runtime.sendMessage({ type: 'simulate-ad' });
-  $('testState').textContent = result?.ok
-    ? 'Simulated ad active'
-    : `Test failed: ${result?.reason || 'unknown'}`;
-  $('status').textContent = result?.ok
-    ? 'Testing backup switch…'
-    : 'Backup not ready — use Prepare backup first';
+  $('testState').textContent = result?.ok ? 'Simulated ad active' : `Test failed: ${result?.reason || 'unknown'}`;
+  $('status').textContent = result?.ok ? 'Testing backup switch…' : 'Backup not ready — use Prepare backup first';
 });
 
 $('simulateEnd').addEventListener('click', async () => {
