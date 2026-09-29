@@ -2,20 +2,20 @@
 
 Stream Bridge detects Twitch ad breaks and temporarily opens a configured YouTube live stream in a separate browser tab.
 
-## v0.6.0
+## v0.7.0
 
-This version uses the v0.4 interface as the baseline and changes only the behavior needed for the new ad-switch flow.
+This version keeps the v0.4-style interface and adds Twitch audio muting during the temporary YouTube switch, plus small styling refinements to the Twitch and YouTube sections.
 
 ### Behavior
 
 - The active Twitch streamer is detected automatically when the popup is opened.
 - The user pastes the actual YouTube live-video URL.
 - When Twitch enters an ad, Stream Bridge opens that YouTube video in a separate tab and switches to it.
-- The original Twitch tab remains open.
-- When Twitch reports that the ad has ended, Stream Bridge closes the temporary YouTube tab and activates the original Twitch tab again.
+- The original Twitch tab remains open and is muted while YouTube is active.
+- When Twitch reports that the ad has ended, Stream Bridge closes the temporary YouTube tab, restores Twitch, and restores the Twitch tab's previous mute state.
 - The test button uses the same switching path and treats the test ad as exactly 12 seconds long.
 - There is no backup preparation step and no enable/disable toggle.
-- The test button remains a simple temporary control and is not part of the product's final UI.
+- The test button remains unchanged visually and is only a temporary testing control.
 
 ### Test
 
@@ -30,6 +30,10 @@ This version uses the v0.4 interface as the baseline and changes only the behavi
 ### Detection
 
 The detector observes Twitch HLS `.m3u8` player traffic for the useful `stitched` / `MIDROLL` markers identified from the supplied reference extension. Stream Bridge does not remove or rewrite ad segments.
+
+### UI notes
+
+The Twitch streamer and YouTube live-stream sections now use card-style fields and clearer hierarchy. The Test section and Simulate ad button are intentionally unchanged.
 
 ### Current limitation
 
