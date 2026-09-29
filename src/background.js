@@ -78,20 +78,12 @@ async function findExistingBackupTab(twitchTabId) {
   return null;
 }
 
-async function waitForYoutubeNavigation(tabId, timeoutMs = 10000) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      const tab = await chrome.tabs.get(tabId);
-      if (tab.status === 'complete') return tab;
-    } catch {
-      return null;
-    }
-    await new Promise(resolve => setTimeout(resolve, 250));
+async function getBackupTab(tabId) {
+  try {
+    return await chrome.tabs.get(tabId);
+  } catch {
+    return null;
   }
-
-  try { return await chrome.tabs.get(tabId); } catch { return null; }
 }
 
 async function ensureBackupTab(twitchTab, { force = false } = {}) {
@@ -147,11 +139,13 @@ async function ensureBackupTab(twitchTab, { force = false } = {}) {
       await persistState();
     }
 
-    const settled = await waitForYoutubeNavigation(backup.id);
+    const settled = await getBackupTab(backup.id);
     if (!settled?.id) return null;
 
     state.backupUrl = settled.url || target;
-    state.backupReady = settled.status === 'complete';
+    // "Ready" means the backup tab exists and points at the configured video.
+    // YouTube is allowed to continue loading in the background.
+    state.backupReady = true;
     state.backupClosedByUser = false;
     tabState.set(twitchTab.id, state);
     await persistState();
