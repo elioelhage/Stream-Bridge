@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stream Bridge",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Switch to a configured YouTube live stream during Twitch ads.",
   "permissions": [
     "storage",
@@ -21,15 +21,23 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.twitch.tv/*"],
-      "js": ["src/bridge.js"],
+      "matches": [
+        "https://www.twitch.tv/*"
+      ],
+      "js": [
+        "src/bridge.js"
+      ],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/twitch-detector.js"],
-      "matches": ["https://www.twitch.tv/*"]
+      "resources": [
+        "src/twitch-detector.js"
+      ],
+      "matches": [
+        "https://www.twitch.tv/*"
+      ]
     }
   ]
 }
