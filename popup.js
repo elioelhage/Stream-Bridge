@@ -1,6 +1,5 @@
 const DEFAULTS = {
-  enabled: true,
-  twitchChannel: ''
+  youtubeVideoUrl: ''
 };
 
 const $ = (id) => document.getElementById(id);
@@ -11,37 +10,38 @@ async function getActiveTwitchTab() {
   return tab;
 }
 
+function getTwitchChannel(tab) {
+  try {
+    const parts = new URL(tab.url).pathname.split('/').filter(Boolean);
+    if (!parts.length) return '';
+
+    const reserved = new Set([
+      'directory', 'downloads', 'jobs', 'search', 'settings', 'subscriptions',
+      'inventory', 'drops', 'friends', 'videos', 'following', 'p', 'legal'
+    ]);
+
+    return reserved.has(parts[0].toLowerCase()) ? '' : parts[0];
+  } catch {
+    return '';
+  }
+}
+
 async function load() {
   const settings = await chrome.storage.local.get(DEFAULTS);
-  $('enabled').checked = Boolean(settings.enabled);
-  $('twitchChannel').value = settings.twitchChannel || '';
+  $('youtubeVideoUrl').value = settings.youtubeVideoUrl || '';
 
   const activeTab = await getActiveTwitchTab();
-  if (activeTab && !$('twitchChannel').value) {
-    const currentChannel = new URL(activeTab.url).pathname.split('/').filter(Boolean)[0]?.split('?')[0] || '';
-    if (currentChannel) $('twitchChannel').value = currentChannel;
-  }
+  const channel = activeTab ? getTwitchChannel(activeTab) : '';
 
-  $('status').textContent = settings.enabled ? 'Ready to detect ads' : 'Detection disabled';
+  $('twitchChannel').value = channel || 'Open a Twitch stream';
+  $('status').textContent = channel ? 'Twitch stream detected' : 'Open a Twitch stream';
 }
 
 $('save').addEventListener('click', async () => {
   await chrome.storage.local.set({
-    enabled: $('enabled').checked,
-    twitchChannel: $('twitchChannel').value.trim()
+    youtubeVideoUrl: $('youtubeVideoUrl').value.trim()
   });
   $('status').textContent = 'Saved';
-});
-
-$('enabled').addEventListener('change', async () => {
-  await chrome.storage.local.set({ enabled: $('enabled').checked });
-  $('status').textContent = $('enabled').checked ? 'Ready to detect ads' : 'Detection disabled';
-});
-
-$('twitchChannel').addEventListener('change', async () => {
-  await chrome.storage.local.set({
-    twitchChannel: $('twitchChannel').value.trim()
-  });
 });
 
 $('simulateStart').addEventListener('click', async () => {
@@ -51,14 +51,21 @@ $('simulateStart').addEventListener('click', async () => {
     return;
   }
 
-  const response = await chrome.tabs.sendMessage(activeTab.id, {
-    type: 'simulate-ad'
+  await chrome.storage.local.set({
+    youtubeVideoUrl: $('youtubeVideoUrl').value.trim()
+  });
+
+  const result = await chrome.runtime.sendMessage({
+    type: 'simulate-ad',
+    twitchTabId: activeTab.id
   }).catch(() => null);
 
-  if (response?.ok) {
+  if (result?.ok) {
     $('status').textContent = '12-second test started';
+  } else if (result?.reason === 'invalid-youtube-video-url') {
+    $('status').textContent = 'Enter a YouTube live-stream link';
   } else {
-    $('status').textContent = 'Reload the Twitch tab and try again';
+    $('status').textContent = 'Test could not start';
   }
 });
 
