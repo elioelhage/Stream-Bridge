@@ -15,15 +15,28 @@
       </div>
     </header>
 
-    <label>
-      <span>Twitch streamer</span>
-      <input id="twitchChannel" type="text" placeholder="Open a Twitch stream" readonly>
-    </label>
+    <section class="stream-section">
+      <div class="section-heading">
+        <span class="section-kicker">TWITCH STREAMER</span>
+        <span class="section-status">Detected</span>
+      </div>
+      <div class="stream-field readonly-field">
+        <span class="field-icon" aria-hidden="true">T</span>
+        <input id="twitchChannel" type="text" placeholder="Open a Twitch stream" readonly>
+      </div>
+    </section>
 
-    <label>
-      <span>YouTube live stream</span>
-      <input id="youtubeVideoUrl" type="url" placeholder="https://www.youtube.com/watch?v=…">
-    </label>
+    <section class="stream-section">
+      <div class="section-heading">
+        <span class="section-kicker">YOUTUBE LIVE STREAM</span>
+        <span class="section-status">Backup</span>
+      </div>
+      <div class="stream-field">
+        <span class="field-icon" aria-hidden="true">▶</span>
+        <input id="youtubeVideoUrl" type="url" placeholder="Paste the live stream URL">
+      </div>
+      <p class="helper-text">This is the stream Stream Bridge opens during a Twitch ad.</p>
+    </section>
 
     <div class="actions">
       <button id="save" class="primary">Save</button>
