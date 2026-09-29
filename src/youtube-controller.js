@@ -28,11 +28,14 @@
 
   function classifyVideo() {
     const response = findPlayerResponse();
-    const details = response?.videoDetails;
-    const microformat = response?.microformat?.playerMicroformatRenderer;
+    if (!response) return null;
+
+    const details = response.videoDetails;
+    const microformat = response.microformat?.playerMicroformatRenderer;
     const liveDetails = microformat?.liveBroadcastDetails;
 
     if (details?.isLiveContent === true) return true;
+    if (details?.isLiveContent === false) return false;
     if (liveDetails && (liveDetails.startTimestamp || liveDetails.endTimestamp)) return true;
 
     return false;
@@ -49,6 +52,8 @@
     if (video && Number.isFinite(video.currentTime)) {
       lastKnownTime = video.currentTime;
     }
+
+    if (typeof isLive !== 'boolean') return;
 
     if (isLive !== lastIsLive || video) {
       lastIsLive = isLive;
@@ -67,7 +72,12 @@
 
     const trySeek = () => {
       const video = getVideo();
-      if (classifyVideo()) return;
+      const isLive = classifyVideo();
+      if (isLive === true) return;
+      if (isLive === null) {
+        if (Date.now() - startedAt < 15000) setTimeout(trySeek, 250);
+        return;
+      }
 
       if (video && Number.isFinite(video.duration) && video.duration > 0) {
         const target = Math.min(time, Math.max(0, video.duration - 0.25));
@@ -136,6 +146,8 @@
 
   function announceReady() {
     const isLive = classifyVideo();
+    if (typeof isLive !== 'boolean') return;
+
     lastIsLive = isLive;
 
     chrome.runtime.sendMessage({
