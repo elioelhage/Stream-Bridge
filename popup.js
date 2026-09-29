@@ -1,25 +1,20 @@
 const DEFAULTS = {
   enabled: true,
-  twitchChannel: '',
-  youtubeVideoUrl: '',
-  closeBackupAfterReturn: false
+  twitchChannel: ''
 };
 
 const $ = (id) => document.getElementById(id);
 
-function getActiveTwitchTab() {
-  return chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-    if (!tab?.id || !tab.url?.startsWith('https://www.twitch.tv/')) return null;
-    return tab;
-  });
+async function getActiveTwitchTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.url?.startsWith('https://www.twitch.tv/')) return null;
+  return tab;
 }
 
 async function load() {
   const settings = await chrome.storage.local.get(DEFAULTS);
   $('enabled').checked = Boolean(settings.enabled);
   $('twitchChannel').value = settings.twitchChannel || '';
-  $('youtubeVideoUrl').value = settings.youtubeVideoUrl || '';
-  $('closeBackupAfterReturn').checked = Boolean(settings.closeBackupAfterReturn);
 
   const activeTab = await getActiveTwitchTab();
   if (activeTab && !$('twitchChannel').value) {
@@ -27,68 +22,44 @@ async function load() {
     if (currentChannel) $('twitchChannel').value = currentChannel;
   }
 
-  $('status').textContent = settings.enabled ? 'Ready' : 'Disabled';
+  $('status').textContent = settings.enabled ? 'Ready to detect ads' : 'Detection disabled';
 }
 
 $('save').addEventListener('click', async () => {
   await chrome.storage.local.set({
     enabled: $('enabled').checked,
-    twitchChannel: $('twitchChannel').value.trim(),
-    youtubeVideoUrl: $('youtubeVideoUrl').value.trim(),
-    closeBackupAfterReturn: $('closeBackupAfterReturn').checked
+    twitchChannel: $('twitchChannel').value.trim()
   });
   $('status').textContent = 'Saved';
 });
 
 $('enabled').addEventListener('change', async () => {
   await chrome.storage.local.set({ enabled: $('enabled').checked });
-  $('status').textContent = $('enabled').checked ? 'Ready' : 'Disabled';
+  $('status').textContent = $('enabled').checked ? 'Ready to detect ads' : 'Detection disabled';
 });
 
-$('prepare').addEventListener('click', async () => {
-  const activeTab = await getActiveTwitchTab();
-  if (!activeTab) {
-    $('status').textContent = 'Open the Twitch stream first';
-    return;
-  }
-
+$('twitchChannel').addEventListener('change', async () => {
   await chrome.storage.local.set({
-    twitchChannel: $('twitchChannel').value.trim(),
-    youtubeVideoUrl: $('youtubeVideoUrl').value.trim()
+    twitchChannel: $('twitchChannel').value.trim()
   });
-
-  const result = await chrome.runtime.sendMessage({
-    type: 'prepare-backup',
-    twitchTabId: activeTab.id
-  });
-  if (result?.ok) {
-    $('status').textContent = 'Backup ready';
-  } else if (result?.reason === 'invalid-youtube-video-url') {
-    $('status').textContent = 'Enter a YouTube video link';
-  } else {
-    $('status').textContent = 'Could not prepare backup';
-  }
 });
 
 $('simulateStart').addEventListener('click', async () => {
   const activeTab = await getActiveTwitchTab();
   if (!activeTab) {
-    $('testState').textContent = 'Open Twitch first';
+    $('status').textContent = 'Open a Twitch stream first';
     return;
   }
 
-  const result = await chrome.runtime.sendMessage({
-    type: 'simulate-ad',
-    twitchTabId: activeTab.id
-  });
-  $('testState').textContent = result?.ok ? 'Simulated ad active' : `Test failed: ${result?.reason || 'unknown'}`;
-  $('status').textContent = result?.ok ? 'Testing backup switch…' : 'Backup not ready — use Prepare backup first';
-});
+  const response = await chrome.tabs.sendMessage(activeTab.id, {
+    type: 'simulate-ad'
+  }).catch(() => null);
 
-$('simulateEnd').addEventListener('click', async () => {
-  const result = await chrome.runtime.sendMessage({ type: 'end-simulated-ad' });
-  $('testState').textContent = result?.ok ? 'Returned to Twitch' : 'Nothing to return from';
-  $('status').textContent = result?.ok ? 'Test complete' : 'No simulated switch active';
+  if (response?.ok) {
+    $('status').textContent = '12-second test started';
+  } else {
+    $('status').textContent = 'Reload the Twitch tab and try again';
+  }
 });
 
 load().catch(() => {
