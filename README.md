@@ -1,28 +1,22 @@
 # Stream Bridge
 
-Stream Bridge detects Twitch ad breaks and temporarily opens a configured YouTube live stream in a separate browser tab.
+Stream Bridge detects Twitch ad breaks and temporarily opens a configured YouTube video in a separate browser tab.
 
-## v0.9.0
+## v1.1.0
 
-Version 0.9 is a stability fix for the Twitch player regression introduced in v0.8.
-
-### Stability
-
-- Restores the previously stable `Worker` proxy architecture.
-- Removes the v0.8 Worker subclass replacement.
-- Removes the active resource-polling HLS fallback that could interfere with Twitch playback.
-- Keeps HLS inspection observational: Stream Bridge does not rewrite HLS responses or modify the Twitch video player.
-
-### Detection
-
-The detector still recognizes multiple Twitch ad signals, including `twitch-stitched-ad`, `stitched-ad-*`, `MIDROLL`, Twitch ad metadata, and visible Twitch ad/countdown elements.
+### Backup video
+- The backup can now be **any YouTube video**, not only a live stream.
+- Regular videos resume from the exact position reached during the Twitch ad.
+- Live content is detected from YouTube's player metadata and is returned to the live edge instead of restoring a playback timestamp.
 
 ### Switching
+- Twitch is muted before the YouTube tab is opened.
+- When the ad ends, the YouTube tab closes and Twitch becomes active again.
+- Twitch's original mute state is explicitly restored, fixing cases where Twitch stayed muted after the ad.
+- The old **Simulate ad** test has been removed.
 
-The existing behavior remains unchanged: on a detected ad, Stream Bridge opens the configured YouTube live stream in a separate tab, mutes Twitch, and switches to YouTube. When the ad ends, the temporary tab closes, Twitch becomes active again, and its previous mute state is restored.
-
-The **Simulate ad** test remains 12 seconds.
-
-### Important
-
-Because the detector touches Twitch's Worker construction path, the extension should be reloaded from `chrome://extensions/` after installing v0.9.
+### Popup
+- Simplified v1.1 settings UI.
+- Clear Twitch source / YouTube backup sections.
+- Version number is shown in the header and footer.
+- Added a Stream Bridge extension icon.

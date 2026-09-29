@@ -26,6 +26,34 @@ function getTwitchChannel(tab) {
   }
 }
 
+function normalizeYoutubeVideoUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    if (!['www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be'].includes(host)) return '';
+
+    if (host === 'youtu.be') {
+      const id = url.pathname.replace(/^\/+/, '').split(/[/?#]/, 1)[0];
+      return id ? 'https://www.youtube.com/watch?v=' + encodeURIComponent(id) : '';
+    }
+
+    if (url.pathname === '/watch' && url.searchParams.get('v')) {
+      return 'https://www.youtube.com/watch?v=' + encodeURIComponent(url.searchParams.get('v'));
+    }
+
+    if (/^\/live\//i.test(url.pathname)) {
+      return 'https://www.youtube.com' + url.pathname;
+    }
+
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 async function load() {
   const settings = await chrome.storage.local.get(DEFAULTS);
   $('youtubeVideoUrl').value = settings.youtubeVideoUrl || '';
@@ -33,40 +61,21 @@ async function load() {
   const activeTab = await getActiveTwitchTab();
   const channel = activeTab ? getTwitchChannel(activeTab) : '';
 
-  $('twitchChannel').value = channel || 'Open a Twitch stream';
-  $('status').textContent = channel ? 'Twitch stream detected' : 'Open a Twitch stream';
+  $('twitchChannel').value = channel || 'No Twitch stream detected';
+  $('status').textContent = channel ? 'Ready' : 'Open a Twitch stream';
 }
 
 $('save').addEventListener('click', async () => {
-  await chrome.storage.local.set({
-    youtubeVideoUrl: $('youtubeVideoUrl').value.trim()
-  });
-  $('status').textContent = 'Saved';
-});
+  const value = $('youtubeVideoUrl').value.trim();
 
-$('simulateStart').addEventListener('click', async () => {
-  const activeTab = await getActiveTwitchTab();
-  if (!activeTab) {
-    $('status').textContent = 'Open a Twitch stream first';
+  if (!normalizeYoutubeVideoUrl(value)) {
+    $('status').textContent = 'Enter a valid YouTube video or live link';
+    $('youtubeVideoUrl').focus();
     return;
   }
 
-  await chrome.storage.local.set({
-    youtubeVideoUrl: $('youtubeVideoUrl').value.trim()
-  });
-
-  const result = await chrome.runtime.sendMessage({
-    type: 'simulate-ad',
-    twitchTabId: activeTab.id
-  }).catch(() => null);
-
-  if (result?.ok) {
-    $('status').textContent = '12-second test started';
-  } else if (result?.reason === 'invalid-youtube-video-url') {
-    $('status').textContent = 'Enter a YouTube live-stream link';
-  } else {
-    $('status').textContent = 'Test could not start';
-  }
+  await chrome.storage.local.set({ youtubeVideoUrl: value });
+  $('status').textContent = 'Saved';
 });
 
 load().catch(() => {
