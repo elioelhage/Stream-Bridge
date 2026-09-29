@@ -162,11 +162,13 @@ async function switchToYoutube(twitchTabId) {
 
   state = tabState.get(twitchTabId) || {};
   state.youtubeTabId = youtubeTab.id;
+  state.twitchWasMuted = Boolean(twitchTab.mutedInfo?.muted);
   state.switched = true;
   state.manuallyClosed = false;
   tabState.set(twitchTabId, state);
   await persistState();
 
+  await chrome.tabs.update(twitchTab.id, { muted: true }).catch(() => {});
   return { ok: true, action: 'switched-to-youtube' };
 }
 
