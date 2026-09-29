@@ -190,6 +190,9 @@ async function returnToTwitch(twitchTabId) {
 
   await chrome.windows.update(twitchTab.windowId, { focused: true }).catch(() => {});
   await chrome.tabs.update(twitchTab.id, { active: true }).catch(() => {});
+  if (!state.twitchWasMuted) {
+    await chrome.tabs.update(twitchTab.id, { muted: false }).catch(() => {});
+  }
 
   clearTimeout(simulationTimers.get(twitchTabId));
   simulationTimers.delete(twitchTabId);
@@ -197,6 +200,7 @@ async function returnToTwitch(twitchTabId) {
   state.youtubeTabId = null;
   state.switched = false;
   state.manuallyClosed = false;
+  state.twitchWasMuted = false;
   state.lastEventWasSimulated = false;
   tabState.set(twitchTabId, state);
   await persistState();
@@ -279,6 +283,12 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     if (state.youtubeTabId === tabId && state.switched) {
       state.youtubeTabId = null;
       state.manuallyClosed = true;
+      state.switched = false;
+      state.lastEventWasSimulated = false;
+      if (!state.twitchWasMuted) {
+        chrome.tabs.update(twitchTabId, { muted: false }).catch(() => {});
+      }
+      state.twitchWasMuted = false;
       tabState.set(twitchTabId, state);
       persistState().catch(() => {});
     }
