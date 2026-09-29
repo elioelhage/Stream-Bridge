@@ -1,16 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Stream Bridge",
-  "version": "0.5.0",
-  "description": "Detect Twitch ads and show an instant Stream Bridge alert.",
+  "version": "0.6.0",
+  "description": "Switch to a configured YouTube live stream during Twitch ads.",
   "permissions": [
     "storage",
     "tabs"
   ],
   "host_permissions": [
     "https://www.twitch.tv/*",
-    "https://*.twitch.tv/*"
+    "https://*.twitch.tv/*",
+    "https://www.youtube.com/*"
   ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
   "action": {
     "default_title": "Stream Bridge",
     "default_popup": "popup.html"
