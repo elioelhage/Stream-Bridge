@@ -6,8 +6,6 @@ const STATE_KEY = 'streamBridgeTabState';
 const tabState = new Map();
 const preparationLocks = new Map();
 const extensionClosingTabs = new Set();
-const simulationTimers = new Map();
-const SIMULATION_DURATION_MS = 12000;
 
 async function getSettings() {
   return chrome.storage.local.get(DEFAULTS);
@@ -56,15 +54,15 @@ function normalizeYoutubeVideoUrl(value) {
 
     if (host === 'youtu.be') {
       const id = url.pathname.replace(/^\/+/, '').split(/[/?#]/, 1)[0];
-      return id ? `https://www.youtube.com/watch?v=${encodeURIComponent(id)}` : '';
+      return id ? 'https://www.youtube.com/watch?v=' + encodeURIComponent(id) : '';
     }
 
     if (url.pathname === '/watch' && url.searchParams.get('v')) {
-      return `https://www.youtube.com/watch?v=${encodeURIComponent(url.searchParams.get('v'))}`;
+      return 'https://www.youtube.com/watch?v=' + encodeURIComponent(url.searchParams.get('v'));
     }
 
     if (/^\/live\//i.test(url.pathname)) {
-      return `https://www.youtube.com${url.pathname}`;
+      return 'https://www.youtube.com' + url.pathname;
     }
 
     return '';
@@ -76,6 +74,15 @@ function normalizeYoutubeVideoUrl(value) {
 async function getTab(tabId) {
   try {
     return await chrome.tabs.get(tabId);
+  } catch {
+    return null;
+  }
+}
+
+async function sendYoutubeMessage(tabId, message) {
+  if (!tabId) return null;
+  try {
+    return await chrome.tabs.sendMessage(tabId, message);
   } catch {
     return null;
   }
@@ -99,7 +106,8 @@ async function ensureYoutubeTab(twitchTab) {
         switched: false,
         manuallyClosed: false,
         youtubeUrl: target,
-        lastEventWasSimulated: false
+        youtubePosition: 0,
+        youtubeIsLive: null
       };
       tabState.set(twitchTab.id, state);
     }
@@ -162,7 +170,6 @@ async function switchToYoutube(twitchTabId) {
     state.twitchWasMuted = Boolean(twitchTab.mutedInfo?.muted);
   }
 
-  // Mute Twitch before opening/focusing YouTube so ad audio cannot leak through.
   await chrome.tabs.update(twitchTab.id, { muted: true }).catch(() => {});
   state.switched = false;
   state.manuallyClosed = false;
@@ -186,7 +193,30 @@ async function switchToYoutube(twitchTabId) {
   tabState.set(twitchTabId, state);
   await persistState();
 
+  await sendYoutubeMessage(youtubeTab.id, {
+    type: 'streambridge-init-youtube',
+    resumeTime: Number.isFinite(state.youtubePosition) ? state.youtubePosition : 0
+  });
+
   return { ok: true, action: 'switched-to-youtube' };
+}
+
+async function captureYoutubeState(state) {
+  if (!state?.youtubeTabId) return;
+
+  const playback = await sendYoutubeMessage(state.youtubeTabId, {
+    type: 'streambridge-get-youtube-state'
+  });
+
+  if (!playback) return;
+
+  if (typeof playback.isLive === 'boolean') {
+    state.youtubeIsLive = playback.isLive;
+  }
+
+  if (!playback.isLive && Number.isFinite(playback.currentTime)) {
+    state.youtubePosition = Math.max(0, playback.currentTime);
+  }
 }
 
 async function returnToTwitch(twitchTabId) {
@@ -200,6 +230,9 @@ async function returnToTwitch(twitchTabId) {
     return { ok: false, reason: 'twitch-tab-missing' };
   }
 
+  await captureYoutubeState(state);
+  await persistState();
+
   if (state.youtubeTabId) {
     extensionClosingTabs.add(state.youtubeTabId);
     try {
@@ -209,48 +242,25 @@ async function returnToTwitch(twitchTabId) {
 
   await chrome.windows.update(twitchTab.windowId, { focused: true }).catch(() => {});
   await chrome.tabs.update(twitchTab.id, { active: true }).catch(() => {});
-  if (!state.twitchWasMuted) {
-    await chrome.tabs.update(twitchTab.id, { muted: false }).catch(() => {});
-  }
 
-  clearTimeout(simulationTimers.get(twitchTabId));
-  simulationTimers.delete(twitchTabId);
+  // Restore exactly the mute state Twitch had before the ad.
+  await chrome.tabs.update(twitchTab.id, {
+    muted: Boolean(state.twitchWasMuted)
+  }).catch(() => {});
 
   state.youtubeTabId = null;
   state.switched = false;
   state.manuallyClosed = false;
   state.twitchWasMuted = false;
-  state.lastEventWasSimulated = false;
   tabState.set(twitchTabId, state);
   await persistState();
 
   return { ok: true, action: 'returned-to-twitch' };
 }
 
-async function handleAdState({ tab, active, simulated = false }) {
+async function handleAdState({ tab, active }) {
   if (!tab?.id) return { ok: false, reason: 'no-twitch-tab' };
-
-  if (active) {
-    const state = tabState.get(tab.id) || {};
-    state.lastEventWasSimulated = simulated;
-    tabState.set(tab.id, state);
-    await persistState();
-
-    const result = await switchToYoutube(tab.id);
-
-    if (simulated && result.ok) {
-      clearTimeout(simulationTimers.get(tab.id));
-      const timer = setTimeout(() => {
-        simulationTimers.delete(tab.id);
-        returnToTwitch(tab.id).catch(() => {});
-      }, SIMULATION_DURATION_MS);
-      simulationTimers.set(tab.id, timer);
-    }
-
-    return result;
-  }
-
-  return returnToTwitch(tab.id);
+  return active ? switchToYoutube(tab.id) : returnToTwitch(tab.id);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -259,31 +269,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!sender.tab?.id) return { ok: false, reason: 'no-twitch-tab' };
       return handleAdState({
         tab: sender.tab,
-        active: Boolean(message.active),
-        simulated: false
+        active: Boolean(message.active)
       });
     })().then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'error' }));
     return true;
   }
 
-  if (message?.type === 'simulate-ad') {
+  if (message?.type === 'youtube-state') {
     (async () => {
-      if (!message.twitchTabId) return { ok: false, reason: 'no-twitch-tab' };
+      const youtubeTabId = sender.tab?.id;
+      if (!youtubeTabId) return { ok: false };
 
-      let twitchTab;
-      try {
-        twitchTab = await chrome.tabs.get(message.twitchTabId);
-      } catch {
-        return { ok: false, reason: 'twitch-tab-missing' };
+      for (const [twitchTabId, state] of tabState.entries()) {
+        if (state.youtubeTabId !== youtubeTabId) continue;
+
+        if (typeof message.isLive === 'boolean') {
+          state.youtubeIsLive = message.isLive;
+        }
+        if (!message.isLive && Number.isFinite(message.currentTime)) {
+          state.youtubePosition = Math.max(0, message.currentTime);
+        }
+
+        tabState.set(twitchTabId, state);
+        return { ok: true };
       }
 
-      const settings = await getSettings();
-      if (!normalizeYoutubeVideoUrl(settings.youtubeVideoUrl)) {
-        return { ok: false, reason: 'invalid-youtube-video-url' };
+      return { ok: false };
+    })().then(sendResponse).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  if (message?.type === 'youtube-ready') {
+    (async () => {
+      const youtubeTabId = sender.tab?.id;
+      if (!youtubeTabId) return { ok: false };
+
+      for (const [twitchTabId, state] of tabState.entries()) {
+        if (state.youtubeTabId !== youtubeTabId) continue;
+
+        if (typeof message.isLive === 'boolean') {
+          state.youtubeIsLive = message.isLive;
+        }
+
+        tabState.set(twitchTabId, state);
+        await persistState();
+
+        if (!message.isLive && Number.isFinite(state.youtubePosition) && state.youtubePosition > 0) {
+          await sendYoutubeMessage(youtubeTabId, {
+            type: 'streambridge-seek',
+            time: state.youtubePosition
+          });
+        }
+
+        return { ok: true };
       }
 
-      return handleAdState({ tab: twitchTab, active: true, simulated: true });
-    })().then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'error' }));
+      return { ok: false };
+    })().then(sendResponse).catch(() => sendResponse({ ok: false }));
     return true;
   }
 });
@@ -293,8 +335,6 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
   for (const [twitchTabId, state] of tabState.entries()) {
     if (twitchTabId === tabId) {
-      clearTimeout(simulationTimers.get(tabId));
-      simulationTimers.delete(tabId);
       tabState.delete(tabId);
       continue;
     }
@@ -303,7 +343,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
       state.youtubeTabId = null;
       state.manuallyClosed = true;
       state.switched = false;
-      state.lastEventWasSimulated = false;
+      state.youtubeIsLive = null;
       if (!state.twitchWasMuted) {
         chrome.tabs.update(twitchTabId, { muted: false }).catch(() => {});
       }
