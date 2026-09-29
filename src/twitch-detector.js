@@ -89,18 +89,32 @@
         '  const nativeFetch = self.fetch;',
         '  const hlsPattern = /\\.m3u8(?:[?#]|$)/i;',
         '  const adMarkers = [/\\bstitched\\b/i, /"MIDROLL"/i, /"midroll"/i];',
+        '',
         '  function inspect(url, text) {',
         '    if (typeof text !== "string" || !hlsPattern.test(url)) return;',
         '    const active = adMarkers.some((marker) => marker.test(text));',
-        '    self.postMessage({ __streamBridge: true, type: "twitch-ad-state", active, sourceType: "worker-hls", url, timestamp: Date.now() });',
+        '    self.postMessage({',
+        '      __streamBridge: true,',
+        '      type: "twitch-ad-state",',
+        '      active,',
+        '      sourceType: "worker-hls",',
+        '      url,',
+        '      timestamp: Date.now()',
+        '    });',
         '  }',
+        '',
         '  self.fetch = function streamBridgeWorkerFetch(input, init, ...rest) {',
         '    let url = "";',
-        '    try { url = typeof input === "string" ? new URL(input, self.location.href).href : input?.url || ""; } catch {}',
+        '    try {',
+        '      url = typeof input === "string" ? new URL(input, self.location.href).href : input?.url || "";',
+        '    } catch {}',
+        '',
         '    const responsePromise = nativeFetch.call(this, input, init, ...rest);',
         '    if (hlsPattern.test(url)) {',
         '      responsePromise.then((response) => {',
-        '        try { response.clone().text().then((text) => inspect(url, text)).catch(() => {}); } catch {}',
+        '        try {',
+        '          response.clone().text().then((text) => inspect(url, text)).catch(() => {});',
+        '        } catch {}',
         '      }).catch(() => {});',
         '    }',
         '    return responsePromise;',
@@ -123,7 +137,9 @@
           isTwitchWorker = parsed.origin.endsWith('.twitch.tv') || parsed.origin === 'https://www.twitch.tv';
         } catch {}
 
-        if (!isTwitchWorker) return Reflect.construct(Target, args, NewTarget);
+        if (!isTwitchWorker) {
+          return Reflect.construct(Target, args, NewTarget);
+        }
 
         const isModuleWorker = args?.[1]?.type === 'module';
         const wrappedUrl = buildWorkerUrl(new URL(originalUrl, location.href).href, isModuleWorker);
@@ -146,5 +162,17 @@
         return worker;
       }
     });
+  } catch {}
+
+  try {
+    const observer = new MutationObserver(() => {
+      const bodyText = document.body?.innerText || '';
+      const hasExplicitCountdown = /(?:advertisement|ad)\s*(?:\(|:)?\s*\d{1,2}:\d{2}/i.test(bodyText);
+      if (hasExplicitCountdown) {
+        emit(true, 'dom', location.href);
+      }
+    });
+
+    observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
   } catch {}
 })();
