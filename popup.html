@@ -25,8 +25,8 @@
     </label>
 
     <label>
-      <span>YouTube handle <em>(defaults to Twitch name)</em></span>
-      <input id="youtubeChannel" type="text" placeholder="@xqc">
+      <span>YouTube live video URL</span>
+      <input id="youtubeVideoUrl" type="url" placeholder="https://www.youtube.com/watch?v=…">
     </label>
 
     <label class="checkbox-row">
@@ -44,14 +44,14 @@
         <strong>Test mode</strong>
         <span id="testState">Idle</span>
       </div>
-      <p>Use this to test switching without waiting for a real Twitch ad.</p>
+      <p>Test the exact switch/return path without waiting for a Twitch ad.</p>
       <div class="actions">
         <button id="simulateStart">Simulate ad</button>
         <button id="simulateEnd">Return to Twitch</button>
       </div>
     </section>
 
-    <p class="note">v0.2 observes Twitch's player state and switches tabs. Test mode uses the same switching path as a real ad signal.</p>
+    <p class="note">v0.3 uses your exact YouTube live-video URL. It does not construct a channel /live URL or alter Twitch playback.</p>
   </main>
   <script src="popup.js"></script>
 </body>
