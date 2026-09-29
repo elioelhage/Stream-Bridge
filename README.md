@@ -1,39 +1,38 @@
 # StreamSwitch
 
-StreamSwitch is a browser extension prototype that keeps Twitch as the primary viewing experience and temporarily switches to a creator's YouTube **live stream** when Twitch enters an ad break.
+StreamSwitch is a browser extension prototype that keeps Twitch as the primary viewing experience and temporarily switches to a creator's YouTube live video when Twitch enters an ad break.
 
-## v0.2.0
+## v0.3.0
 
-Version 0.2 adds deterministic testing and makes YouTube backup discovery simpler.
+Version 0.3 replaces fragile YouTube channel-name discovery with an exact user-supplied YouTube video URL and fixes backup-tab creation races.
 
 ### What changed
 
-- **Test mode:** `Simulate ad` uses the same background switching path as a real detected ad. `Return to Twitch` ends the simulated ad so the return path can be tested immediately.
-- **Automatic YouTube default:** the YouTube handle defaults to the Twitch streamer name. Example: Twitch `xqc` → YouTube `@xqc`.
-- **Override supported:** when the creator uses a different YouTube handle, edit the YouTube field and save it.
-- **Live-only backup target:** StreamSwitch opens the creator's YouTube `/live` route and only considers the backup ready after YouTube resolves to a likely live-video URL (`/watch...` or `/live/...`). It does not intentionally send you to the creator's ordinary channel page.
-- **Persistent backup-tab state:** the backup tab association is stored in extension storage, so the service worker can restore it after being suspended.
+- **Exact YouTube backup URL:** paste the live video's YouTube watch link (or a YouTube `/live/<id>` link). StreamSwitch opens that exact video instead of guessing a channel URL.
+- **No channel-page fallback:** StreamSwitch no longer constructs `https://youtube.com/@name/live` and never intentionally sends the viewer to the creator's ordinary channel page.
+- **Duplicate-tab fix:** backup preparation is serialized per Twitch tab, preventing concurrent Twitch events from creating multiple YouTube tabs.
+- **Manual-close protection:** if the backup tab is manually closed while the extension is switched over, StreamSwitch will not recreate it repeatedly during that same ad. Use **Prepare backup** to explicitly reopen it.
+- **Persistent state:** the Twitch → backup tab association remains stored in extension storage.
+- **Test mode remains:** **Simulate ad** and **Return to Twitch** exercise the same switching/return logic used by real ad events.
 
-### Setup
-
-Load the repository as an unpacked Manifest V3 extension in Chrome/Chromium:
+## Setup
 
 1. Open `chrome://extensions/`.
 2. Enable Developer mode.
-3. Choose **Load unpacked** and select the repository directory.
-4. Open the Twitch stream.
-5. Open StreamSwitch. The Twitch channel is detected from the current Twitch tab when possible, and the YouTube field defaults to the same name.
-6. Save, then click **Prepare backup**.
-7. Once the popup says **Backup ready**, use **Simulate ad** to test the switch.
-8. After the test switches tabs, reopen the StreamSwitch popup and press **Return to Twitch** to test the return path.
+3. Choose **Load unpacked** and select this repository directory.
+4. Open the Twitch stream you want to watch.
+5. Open StreamSwitch. The Twitch channel is detected from the current Twitch tab when possible.
+6. Paste the **current YouTube live video URL** into the backup field.
+7. Click **Save**, then **Prepare backup**.
+8. Once the popup says **Backup ready**, click **Simulate ad**.
+9. The YouTube tab should become active. Reopen the extension popup and click **Return to Twitch**.
 
-### Real ad detection
+## Real ad detection
 
-The detector observes Twitch's HLS `.m3u8` player traffic for the same useful ad-state markers identified in the reference blocker supplied for this project (`stitched` / `MIDROLL`). The blocker itself is not copied and StreamSwitch does not strip or rewrite ad segments.
+The detector observes Twitch's HLS `.m3u8` player traffic for the useful `stitched` / `MIDROLL` ad-state markers identified from the reference blocker supplied for this project. StreamSwitch does not strip or rewrite ad segments.
 
-### Limitations of v0.2
+## Limitations of v0.3
 
-- The default same-name YouTube lookup assumes the Twitch name is also the creator's YouTube handle. Change the YouTube field when that is not true.
-- `/live` is used as the discovery route because it is intended to resolve to the creator's current live broadcast; when there is no current live broadcast, StreamSwitch does not activate a non-live channel page.
-- Browser autoplay policy can still affect whether the prepared YouTube player starts with sound.
-- Twitch can change its player implementation or HLS markers, so the detector is isolated for replacement.
+- The backup URL is an exact video URL. When a creator starts a new live broadcast with a different video ID, the saved URL must be updated.
+- Browser autoplay policy can affect whether the prepared YouTube player starts with sound.
+- Twitch can change its player implementation or HLS markers, so the detector remains isolated for replacement.
