@@ -1,18 +1,23 @@
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #f4f4f5;
-  background: #111113;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f7f7f8;
+  background: #0b0b0e;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  width: 330px;
+  width: 350px;
   margin: 0;
-  background: #111113;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(124, 58, 237, .18), transparent 35%),
+    #0b0b0e;
 }
 
 main {
   padding: 18px;
-  padding-bottom: 16px;
 }
 
 header {
@@ -22,9 +27,29 @@ header {
   margin-bottom: 18px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #4c1d95;
+  border-radius: 10px;
+  background: #26104d;
+  color: #c4b5fd;
+  font-size: 18px;
+  font-weight: 800;
+}
+
 h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
+  letter-spacing: -.02em;
 }
 
 p {
@@ -32,41 +57,47 @@ p {
 }
 
 #status {
-  color: #a1a1aa;
-  font-size: 12px;
+  color: #85858f;
+  font-size: 11px;
 }
 
-label {
-  display: block;
-  margin-bottom: 14px;
+.version-pill {
+  padding: 5px 8px;
+  border: 1px solid #29292f;
+  border-radius: 999px;
+  color: #8d8d97;
+  background: #121216;
+  font-size: 9px;
+  font-weight: 800;
 }
 
 .stream-section {
-  padding: 14px;
-  margin-bottom: 12px;
-  border: 1px solid #27272c;
+  padding: 13px;
+  margin-bottom: 10px;
+  border: 1px solid #24242a;
   border-radius: 13px;
-  background: #151519;
+  background: rgba(20, 20, 24, .9);
 }
 
 .section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 9px;
+  margin-bottom: 8px;
 }
 
 .section-kicker {
-  color: #a9a9b3;
+  color: #a1a1aa;
   font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .12em;
+  font-weight: 850;
+  letter-spacing: .14em;
 }
 
 .section-status {
-  color: #71717a;
-  font-size: 9px;
-  font-weight: 700;
+  color: #52525b;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
 }
 
 .stream-field {
@@ -74,15 +105,15 @@ label {
   align-items: center;
   gap: 9px;
   padding: 0 10px;
-  border: 1px solid #323238;
+  border: 1px solid #303038;
   border-radius: 10px;
-  background: #111115;
+  background: #0d0d10;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 
 .stream-field:focus-within {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124,58,237,.1);
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, .11);
 }
 
 .field-icon {
@@ -92,10 +123,18 @@ label {
   height: 22px;
   flex: 0 0 22px;
   border-radius: 7px;
-  background: #24242b;
-  color: #b7b7c0;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
+}
+
+.twitch-icon {
+  background: #24123e;
+  color: #c4b5fd;
+}
+
+.youtube-icon {
+  background: #3a1515;
+  color: #fca5a5;
 }
 
 input[type="text"],
@@ -107,61 +146,53 @@ input[type="url"] {
   background: transparent;
   color: #fff;
   outline: none;
+  font-size: 12px;
 }
 
-input[type="text"]::placeholder,
-input[type="url"]::placeholder {
-  color: #55555d;
+input::placeholder {
+  color: #55555f;
 }
 
 .readonly-field input {
-  color: #e8e8ee;
+  color: #e4e4e7;
   cursor: default;
 }
 
 .helper-text {
   margin-top: 8px;
-  color: #6f6f79;
+  color: #777781;
   font-size: 10px;
-  line-height: 1.4;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
+  line-height: 1.45;
 }
 
 button {
-  flex: 1;
-  border: 1px solid #3f3f46;
-  border-radius: 8px;
-  padding: 9px 10px;
-  background: #18181b;
-  color: #fff;
-  cursor: pointer;
-}
-
-button.primary {
-  border-color: #7c3aed;
+  width: 100%;
+  border: 1px solid #8b5cf6;
+  border-radius: 10px;
+  padding: 10px 12px;
   background: #7c3aed;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 7px 18px rgba(0, 0, 0, .22);
+  transition: transform .12s ease, background .12s ease;
 }
 
-.note {
-  margin-top: 14px;
-  color: #71717a;
-  font-size: 10px;
-  line-height: 1.4;
+button:hover {
+  background: #8b5cf6;
 }
 
-.test-panel {
-  margin-top: 8px;
-  padding-top: 14px;
-  border-top: 1px solid #27272a;
+button:active {
+  transform: translateY(1px);
 }
 
-.test-panel p {
-  color: #71717a;
-  font-size: 11px;
-  line-height: 1.4;
-  margin: 6px 0 10px;
+footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #202025;
+  color: #55555f;
+  font-size: 9px;
 }
