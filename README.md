@@ -1,32 +1,36 @@
 # Stream Bridge
 
-Stream Bridge is a browser extension prototype focused on reliable Twitch ad detection and an immediate on-page alert.
+Stream Bridge detects Twitch ad breaks and temporarily opens a configured YouTube live stream in a separate browser tab.
 
-## v0.5.0
+## v0.6.0
 
-This version deliberately puts the YouTube backup system on hold. The current goal is to prove that Stream Bridge can detect an ad and immediately surface a clean visual signal inside Twitch.
+This version uses the v0.4 interface as the baseline and changes only the behavior needed for the new ad-switch flow.
 
-### Current behavior
+### Behavior
 
-- Detects Twitch ad-state signals through the existing HLS/player observation mechanism.
-- Shows an instant Stream Bridge alert overlay on the Twitch page when an ad is detected.
-- Test mode uses the same in-page alert path and keeps the simulated alert visible for **12 seconds**.
-- There is no automatic YouTube tab creation, preparation, or switching in v0.5.
-- The popup is redesigned as a compact dark interface with Stream Bridge branding, status information, and an inline bridge icon.
+- The active Twitch streamer is detected automatically when the popup is opened.
+- The user pastes the actual YouTube live-video URL.
+- When Twitch enters an ad, Stream Bridge opens that YouTube video in a separate tab and switches to it.
+- The original Twitch tab remains open.
+- When Twitch reports that the ad has ended, Stream Bridge closes the temporary YouTube tab and activates the original Twitch tab again.
+- The test button uses the same switching path and treats the test ad as exactly 12 seconds long.
+- There is no backup preparation step and no enable/disable toggle.
+- The test button remains a simple temporary control and is not part of the product's final UI.
 
-### Test procedure
+### Test
 
 1. Reload the extension from `chrome://extensions/`.
-2. Open a Twitch livestream.
-3. Open Stream Bridge and make sure detection is enabled.
-4. Click **Simulate ad**.
-5. A Stream Bridge alert should appear immediately in the Twitch page and remain visible for 12 seconds.
-6. The alert disappears automatically; there is no return button.
+2. Open the Twitch livestream.
+3. Open Stream Bridge. The Twitch streamer field should already show the current channel.
+4. Paste the actual YouTube live-stream video URL and click **Save**.
+5. Click **Simulate ad**.
+6. The YouTube video should open in a separate tab.
+7. After 12 seconds, the YouTube tab should close and the Twitch tab should become active again.
 
-### Architecture
+### Detection
 
-The background service-worker/backup-tab path is intentionally removed from the active extension architecture for this milestone. The Twitch content script receives real detector events directly and displays the alert immediately.
+The detector observes Twitch HLS `.m3u8` player traffic for the useful `stitched` / `MIDROLL` markers identified from the supplied reference extension. Stream Bridge does not remove or rewrite ad segments.
 
-### Next stage
+### Current limitation
 
-Once detection is proven reliable, the YouTube backup system can be reintroduced separately, without mixing it into the ad-detection debugging work.
+The YouTube URL identifies a specific live broadcast. When the creator starts a new broadcast with a different video URL, the saved link needs to be updated.
