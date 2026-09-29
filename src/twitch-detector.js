@@ -13,6 +13,18 @@
     /X-TV-TWITCH-AD-ROLL-TYPE/i
   ];
 
+
+  const DOM_AD_SELECTORS = [
+    '[data-a-target="video-ad-countdown"]',
+    '[data-a-target="video-ad-label"]',
+    '[data-a-target="ad-countdown"]',
+    '[data-test-selector="ad-banner-default-text"]',
+    '.tw-ad-label',
+    '.video-ad-label',
+    '[class*="ad-countdown"]',
+    '[class*="AdCountdown"]'
+  ];
+
   const state = {
     active: false,
     lastAdAt: 0,
@@ -293,21 +305,45 @@
 
   setInterval(inspectResourceEntries, 1000);
 
-  // Last-resort UI signal for Twitch player versions that expose an explicit
-  // ad countdown in the page.
-  try {
-    const observer = new MutationObserver(() => {
-      const text = document.body?.innerText || '';
+  // DOM fallback for Twitch player versions that expose an explicit ad label/countdown.
+  function hasAdDomSignal() {
+    for (const selector of DOM_AD_SELECTORS) {
+      try {
+        if (document.querySelector(selector)) return true;
+      } catch {}
+    }
 
-      if (/(?:advertisement|advertising|ad)\s*(?:\(|:|-)?\s*\d{1,2}:\d{2}/i.test(text)) {
+    const player = document.querySelector(
+      '[data-a-target="video-player"], [class*="video-player"]'
+    );
+
+    if (player) {
+      const text = player.textContent || '';
+      if (/\bAd\s*\(\d{1,2}:\d{2}\)/i.test(text)) return true;
+      if (/ad break/i.test(text)) return true;
+    }
+
+    return false;
+  }
+
+  function pollDomAdState() {
+    try {
+      if (hasAdDomSignal()) {
         markAd(location.href, 'dom');
       }
-    });
+    } catch {}
+  }
+
+  try {
+    const observer = new MutationObserver(pollDomAdState);
 
     observer.observe(document.documentElement, {
       subtree: true,
       childList: true,
-      characterData: true
+      characterData: true,
+      attributes: true
     });
+
+    setInterval(pollDomAdState, 250);
   } catch {}
 })();
