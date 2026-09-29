@@ -57,13 +57,10 @@ $('prepare').addEventListener('click', async () => {
     youtubeVideoUrl: $('youtubeVideoUrl').value.trim()
   });
 
-  const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'ping-streamswitch' }).catch(() => null);
-  if (!response) {
-    $('status').textContent = 'Reload the Twitch tab, then try again';
-    return;
-  }
-
-  const result = await chrome.runtime.sendMessage({ type: 'prepare-backup' });
+  const result = await chrome.runtime.sendMessage({
+    type: 'prepare-backup',
+    twitchTabId: activeTab.id
+  });
   if (result?.ok) {
     $('status').textContent = 'Backup ready';
   } else if (result?.reason === 'invalid-youtube-video-url') {
@@ -80,7 +77,10 @@ $('simulateStart').addEventListener('click', async () => {
     return;
   }
 
-  const result = await chrome.runtime.sendMessage({ type: 'simulate-ad' });
+  const result = await chrome.runtime.sendMessage({
+    type: 'simulate-ad',
+    twitchTabId: activeTab.id
+  });
   $('testState').textContent = result?.ok ? 'Simulated ad active' : `Test failed: ${result?.reason || 'unknown'}`;
   $('status').textContent = result?.ok ? 'Testing backup switch…' : 'Backup not ready — use Prepare backup first';
 });
