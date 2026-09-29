@@ -1,17 +1,17 @@
-# StreamSwitch
+# Stream Bridge
 
-StreamSwitch is a browser extension prototype that keeps Twitch as the primary viewing experience and temporarily switches to a creator's YouTube live video when Twitch enters an ad break.
+Stream Bridge is a browser extension prototype that keeps Twitch as the primary viewing experience and temporarily switches to a creator's YouTube live video when Twitch enters an ad break.
 
 ## v0.3.0
 
-Version 0.3 replaces fragile YouTube channel-name discovery with an exact user-supplied YouTube video URL and fixes backup-tab creation races.
+Version 0.4 keeps the exact YouTube video URL approach and fixes the backup preparation false-failure caused by waiting for YouTube to finish loading.
 
 ### What changed
 
-- **Exact YouTube backup URL:** paste the live video's YouTube watch link (or a YouTube `/live/<id>` link). StreamSwitch opens that exact video instead of guessing a channel URL.
-- **No channel-page fallback:** StreamSwitch no longer constructs `https://youtube.com/@name/live` and never intentionally sends the viewer to the creator's ordinary channel page.
+- **Exact YouTube backup URL:** paste the live video's YouTube watch link (or a YouTube `/live/<id>` link). Stream Bridge opens that exact video instead of guessing a channel URL.
+- **No channel-page fallback:** Stream Bridge no longer constructs `https://youtube.com/@name/live` and never intentionally sends the viewer to the creator's ordinary channel page.
 - **Duplicate-tab fix:** backup preparation is serialized per Twitch tab, preventing concurrent Twitch events from creating multiple YouTube tabs.
-- **Manual-close protection:** if the backup tab is manually closed while the extension is switched over, StreamSwitch will not recreate it repeatedly during that same ad. Use **Prepare backup** to explicitly reopen it.
+- **Manual-close protection:** if the backup tab is manually closed while the extension is switched over, Stream Bridge will not recreate it repeatedly during that same ad. Use **Prepare backup** to explicitly reopen it.
 - **Persistent state:** the Twitch → backup tab association remains stored in extension storage.
 - **Test mode remains:** **Simulate ad** and **Return to Twitch** exercise the same switching/return logic used by real ad events.
 
@@ -21,7 +21,7 @@ Version 0.3 replaces fragile YouTube channel-name discovery with an exact user-s
 2. Enable Developer mode.
 3. Choose **Load unpacked** and select this repository directory.
 4. Open the Twitch stream you want to watch.
-5. Open StreamSwitch. The Twitch channel is detected from the current Twitch tab when possible.
+5. Open Stream Bridge. The Twitch channel is detected from the current Twitch tab when possible.
 6. Paste the **current YouTube live video URL** into the backup field.
 7. Click **Save**, then **Prepare backup**.
 8. Once the popup says **Backup ready**, click **Simulate ad**.
@@ -29,7 +29,7 @@ Version 0.3 replaces fragile YouTube channel-name discovery with an exact user-s
 
 ## Real ad detection
 
-The detector observes Twitch's HLS `.m3u8` player traffic for the useful `stitched` / `MIDROLL` ad-state markers identified from the reference blocker supplied for this project. StreamSwitch does not strip or rewrite ad segments.
+The detector observes Twitch's HLS `.m3u8` player traffic for the useful `stitched` / `MIDROLL` ad-state markers identified from the reference blocker supplied for this project. Stream Bridge does not strip or rewrite ad segments.
 
 ## Limitations of v0.3
 
