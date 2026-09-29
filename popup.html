@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>StreamSwitch</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>StreamSwitch</h1>
+        <p id="status">Loading…</p>
+      </div>
+      <label class="switch">
+        <input id="enabled" type="checkbox">
+        <span></span>
+      </label>
+    </header>
+
+    <label>
+      <span>Twitch channel</span>
+      <input id="twitchChannel" type="text" placeholder="xqc">
+    </label>
+
+    <label>
+      <span>YouTube backup channel</span>
+      <input id="youtubeChannel" type="text" placeholder="https://youtube.com/@channel">
+    </label>
+
+    <label class="checkbox-row">
+      <input id="closeBackupAfterReturn" type="checkbox">
+      <span>Close backup tab after the ad</span>
+    </label>
+
+    <div class="actions">
+      <button id="prepare">Prepare backup</button>
+      <button id="save" class="primary">Save</button>
+    </div>
+
+    <p class="note">v0.1 observes Twitch's player state and switches tabs. It does not block or alter the Twitch ad stream.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
