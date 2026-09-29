@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "StreamSwitch",
-  "version": "0.3.0",
+  "name": "Stream Bridge",
+  "version": "0.4.0",
   "description": "Switch from a Twitch live stream to a configured YouTube live video while Twitch is showing an ad.",
   "permissions": [
     "storage",
@@ -16,7 +16,7 @@
     "service_worker": "src/background.js"
   },
   "action": {
-    "default_title": "StreamSwitch",
+    "default_title": "Stream Bridge",
     "default_popup": "popup.html"
   },
   "content_scripts": [
