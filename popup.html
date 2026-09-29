@@ -9,48 +9,45 @@
 <body>
   <main>
     <header>
-      <div>
-        <h1>Stream Bridge</h1>
-        <p id="status">Loading…</p>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">↗</div>
+        <div>
+          <h1>Stream Bridge</h1>
+          <p id="status">Loading…</p>
+        </div>
       </div>
+      <span class="version-pill">v1.1</span>
     </header>
 
     <section class="stream-section">
       <div class="section-heading">
-        <span class="section-kicker">TWITCH STREAMER</span>
-        <span class="section-status">Detected</span>
+        <span class="section-kicker">TWITCH</span>
+        <span class="section-status">SOURCE</span>
       </div>
       <div class="stream-field readonly-field">
-        <span class="field-icon" aria-hidden="true">T</span>
-        <input id="twitchChannel" type="text" placeholder="Open a Twitch stream" readonly>
+        <span class="field-icon twitch-icon" aria-hidden="true">T</span>
+        <input id="twitchChannel" type="text" placeholder="No Twitch stream detected" readonly>
       </div>
     </section>
 
     <section class="stream-section">
       <div class="section-heading">
-        <span class="section-kicker">YOUTUBE LIVE STREAM</span>
-        <span class="section-status">Backup</span>
+        <span class="section-kicker">YOUTUBE</span>
+        <span class="section-status">BACKUP VIDEO</span>
       </div>
       <div class="stream-field">
-        <span class="field-icon" aria-hidden="true">▶</span>
-        <input id="youtubeVideoUrl" type="url" placeholder="Paste the live stream URL">
+        <span class="field-icon youtube-icon" aria-hidden="true">▶</span>
+        <input id="youtubeVideoUrl" type="url" placeholder="Paste any YouTube video or live link">
       </div>
-      <p class="helper-text">This is the stream Stream Bridge opens during a Twitch ad.</p>
+      <p class="helper-text">Any YouTube video works. Live videos return to the live portion; regular videos resume where you left off.</p>
     </section>
 
-    <div class="actions">
-      <button id="save" class="primary">Save</button>
-    </div>
+    <button id="save" class="primary">Save backup video</button>
 
-    <section class="test-panel">
-      <strong>Test</strong>
-      <p>Simulates a 12-second ad. The YouTube stream opens in a separate tab and closes automatically when the test ends.</p>
-      <div class="actions">
-        <button id="simulateStart">Simulate ad</button>
-      </div>
-    </section>
-
-    <p class="note">The Twitch tab stays open while the temporary YouTube tab is used during the ad.</p>
+    <footer>
+      <span>Stream Bridge</span>
+      <span>v1.1</span>
+    </footer>
   </main>
   <script src="popup.js"></script>
 </body>
