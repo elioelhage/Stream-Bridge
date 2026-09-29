@@ -3,17 +3,6 @@
   window.__streamBridgeDetectorInstalled = true;
 
   const HLS_PATTERN = /\.m3u8(?:[?#]|$)/i;
-  const AD_MARKER_PATTERNS = [
-    /\bstiched-ad-[^\s"']+/i,
-    /\bstitched-ad-[^\s"']+/i,
-    /\btwitch-stitched-ad\b/i,
-    /\bstitched\b/i,
-    /"MIDROLL"/i,
-    /"midroll"/i,
-    /X-TV-TWITCH-AD-ROLL-TYPE/i
-  ];
-
-
   const DOM_AD_SELECTORS = [
     '[data-a-target="video-ad-countdown"]',
     '[data-a-target="video-ad-label"]',
@@ -24,6 +13,15 @@
     '[class*="ad-countdown"]',
     '[class*="AdCountdown"]'
   ];
+  const AD_MARKER_PATTERNS = [
+    /\bstiched-ad-[^\s"']+/i,
+    /\bstitched-ad-[^\s"']+/i,
+    /\btwitch-stitched-ad\b/i,
+    /\bstitched\b/i,
+    /"MIDROLL"/i,
+    /"midroll"/i,
+    /X-TV-TWITCH-AD-ROLL-TYPE/i
+  ];
 
   const state = {
     active: false,
@@ -31,77 +29,61 @@
     lastAdDurationMs: 0,
     clearTimer: null,
     cleanPlaylists: 0,
-    inspectedUrls: new Set(),
-    lastDetectedUrl: ''
+    inspectedUrls: new Set()
   };
 
   function extractAdDuration(text) {
-    const durationPatterns = [
+    const patterns = [
       /X-TV-TWITCH-AD-POD-FILLED-DURATION="?([0-9.]+)"?/i,
       /DURATION="?([0-9.]+)"?/i
     ];
-
-    for (const pattern of durationPatterns) {
+    for (const pattern of patterns) {
       const match = text.match(pattern);
       if (!match) continue;
-
       const duration = Number(match[1]);
-      if (Number.isFinite(duration) && duration > 0 && duration < 3600) {
-        return duration * 1000;
-      }
+      if (Number.isFinite(duration) && duration > 0 && duration < 3600) return duration * 1000;
     }
-
     return 0;
   }
 
   function looksLikeAdPlaylist(text) {
-    if (typeof text !== 'string') return false;
-    return AD_MARKER_PATTERNS.some((pattern) => pattern.test(text));
+    return typeof text === 'string' && AD_MARKER_PATTERNS.some((pattern) => pattern.test(text));
   }
 
   function emit(active, sourceType, url, extra = {}) {
     if (state.active === active && !active) return;
-
     state.active = active;
-    state.lastDetectedUrl = url || location.href;
 
     window.postMessage({
       source: 'streambridge',
       type: 'twitch-ad-state',
       active,
       sourceType,
-      url: state.lastDetectedUrl,
+      url: url || location.href,
       timestamp: Date.now(),
       ...extra
     }, '*');
   }
 
-  function scheduleFallbackEnd(url) {
+  function scheduleDurationFallback(url) {
     if (!state.lastAdDurationMs) return;
-
     clearTimeout(state.clearTimer);
-
-    const delay = Math.max(1000, state.lastAdDurationMs + 3000);
     state.clearTimer = setTimeout(() => {
       if (Date.now() - state.lastAdAt >= state.lastAdDurationMs) {
         state.cleanPlaylists = 0;
         state.lastAdDurationMs = 0;
         emit(false, 'hls-duration-fallback', url);
       }
-    }, delay);
+    }, state.lastAdDurationMs + 3000);
   }
 
   function markAd(url, sourceType, durationMs = 0) {
     state.lastAdAt = Date.now();
     state.cleanPlaylists = 0;
-
-    if (durationMs > 0) {
-      state.lastAdDurationMs = durationMs;
-    }
-
+    if (durationMs > 0) state.lastAdDurationMs = durationMs;
     clearTimeout(state.clearTimer);
     emit(true, sourceType, url);
-    scheduleFallbackEnd(url);
+    scheduleDurationFallback(url);
   }
 
   function inspectPlaylist(url, text, sourceType = 'hls') {
@@ -115,8 +97,6 @@
     if (!state.active) return;
 
     state.cleanPlaylists += 1;
-
-    // Require two clean HLS observations before declaring the break finished.
     if (state.cleanPlaylists >= 2 && Date.now() - state.lastAdAt >= 1800) {
       clearTimeout(state.clearTimer);
       state.cleanPlaylists = 0;
@@ -135,39 +115,29 @@
     }
   }
 
-  function inspectFetchResult(url, response, sourceType) {
+  function inspectResponse(url, response, sourceType) {
     if (!response || !HLS_PATTERN.test(url)) return;
-
     try {
-      response.clone().text()
-        .then((text) => inspectPlaylist(url, text, sourceType))
-        .catch(() => {});
+      response.clone().text().then((text) => inspectPlaylist(url, text, sourceType)).catch(() => {});
     } catch {}
   }
 
-  // Main page fetch fallback.
   try {
     const nativeFetch = window.fetch;
     window.fetch = function streamBridgeFetch(input, init, ...rest) {
       const url = getUrl(input);
       const responsePromise = nativeFetch.call(this, input, init, ...rest);
-
       if (HLS_PATTERN.test(url)) {
-        responsePromise
-          .then((response) => inspectFetchResult(url, response, 'window-hls'))
-          .catch(() => {});
+        responsePromise.then((response) => inspectResponse(url, response, 'window-hls')).catch(() => {});
       }
-
       return responsePromise;
     };
   } catch {}
 
-  // Twitch's player fetches its live HLS from a Worker. Wrap Twitch workers
-  // and observe their fetch() responses without modifying the response.
   try {
     const OriginalWorker = window.Worker;
 
-    function buildWorkerBlobCode(originalWorkerUrl) {
+    function buildWorkerBlobCode(originalWorkerUrl, isModuleWorker) {
       const workerCode = [
         '(() => {',
         '  const nativeFetch = self.fetch;',
@@ -197,49 +167,34 @@
         '  function inspect(url, text) {',
         '    if (typeof text !== "string" || !hlsPattern.test(url)) return;',
         '    const active = adPatterns.some((pattern) => pattern.test(text));',
-        '    self.postMessage({',
-        '      __streamBridge: true,',
-        '      type: "twitch-ad-state",',
-        '      active,',
-        '      sourceType: "worker-hls",',
-        '      url,',
-        '      durationSeconds: active ? duration(text) : 0,',
-        '      timestamp: Date.now()',
-        '    });',
+        '    self.postMessage({ __streamBridge: true, type: "twitch-ad-state", active, sourceType: "worker-hls", url, durationSeconds: active ? duration(text) : 0, timestamp: Date.now() });',
         '  }',
         '  self.fetch = function streamBridgeWorkerFetch(input, init, ...rest) {',
         '    let url = "";',
-        '    try {',
-        '      url = typeof input === "string" ? new URL(input, self.location.href).href : input?.url || "";',
-        '    } catch {}',
+        '    try { url = typeof input === "string" ? new URL(input, self.location.href).href : input?.url || ""; } catch {}',
         '    const responsePromise = nativeFetch.call(this, input, init, ...rest);',
         '    if (hlsPattern.test(url)) {',
         '      responsePromise.then((response) => {',
-        '        try {',
-        '          response.clone().text().then((text) => inspect(url, text)).catch(() => {});',
-        '        } catch {}',
+        '        try { response.clone().text().then((text) => inspect(url, text)).catch(() => {}); } catch {}',
         '      }).catch(() => {});',
         '    }',
         '    return responsePromise;',
         '  };',
         '})();',
-        'importScripts(' + JSON.stringify(originalWorkerUrl) + ');'
+        isModuleWorker
+          ? 'import(' + JSON.stringify(originalWorkerUrl) + ');'
+          : 'importScripts(' + JSON.stringify(originalWorkerUrl) + ');'
       ].join('\n');
 
-      return URL.createObjectURL(
-        new Blob([workerCode], { type: 'application/javascript' })
-      );
+      return URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
     }
 
     window.Worker = class StreamBridgeWorker extends OriginalWorker {
       constructor(workerUrl, options) {
         let isTwitchWorker = false;
-
         try {
           const parsed = new URL(workerUrl, location.href);
-          isTwitchWorker =
-            parsed.origin.endsWith('.twitch.tv') ||
-            parsed.origin === 'https://www.twitch.tv';
+          isTwitchWorker = parsed.origin.endsWith('.twitch.tv') || parsed.origin === 'https://www.twitch.tv';
         } catch {}
 
         if (!isTwitchWorker) {
@@ -247,10 +202,8 @@
           return;
         }
 
-        const wrappedUrl = buildWorkerBlobCode(
-          new URL(workerUrl, location.href).href
-        );
-
+        const isModuleWorker = options?.type === 'module';
+        const wrappedUrl = buildWorkerBlobCode(new URL(workerUrl, location.href).href, isModuleWorker);
         super(wrappedUrl, options);
 
         this.addEventListener('message', (event) => {
@@ -259,7 +212,7 @@
 
           window.postMessage({
             source: 'streambridge',
-            type: 'twitch-ad-state',
+            type: data.type,
             active: Boolean(data.active),
             sourceType: data.sourceType || 'worker-hls',
             url: data.url || location.href,
@@ -271,8 +224,6 @@
     };
   } catch {}
 
-  // Performance-based fallback for implementations where the HLS request
-  // is visible to the page but not through the Worker constructor.
   async function inspectResourceEntries() {
     try {
       const entries = performance.getEntriesByType('resource');
@@ -284,28 +235,19 @@
         state.inspectedUrls.add(url);
 
         try {
-          const response = await fetch(url, {
-            credentials: 'include'
-          });
-
-          if (response.ok) {
-            const text = await response.text();
-            inspectPlaylist(url, text, 'performance-hls');
-          }
+          const response = await fetch(url, { credentials: 'include' });
+          if (response.ok) inspectPlaylist(url, await response.text(), 'performance-hls');
         } catch {}
       }
 
       if (state.inspectedUrls.size > 200) {
-        state.inspectedUrls = new Set(
-          Array.from(state.inspectedUrls).slice(-100)
-        );
+        state.inspectedUrls = new Set(Array.from(state.inspectedUrls).slice(-100));
       }
     } catch {}
   }
 
   setInterval(inspectResourceEntries, 1000);
 
-  // DOM fallback for Twitch player versions that expose an explicit ad label/countdown.
   function hasAdDomSignal() {
     for (const selector of DOM_AD_SELECTORS) {
       try {
@@ -313,10 +255,7 @@
       } catch {}
     }
 
-    const player = document.querySelector(
-      '[data-a-target="video-player"], [class*="video-player"]'
-    );
-
+    const player = document.querySelector('[data-a-target="video-player"], [class*="video-player"]');
     if (player) {
       const text = player.textContent || '';
       if (/\bAd\s*\(\d{1,2}:\d{2}\)/i.test(text)) return true;
@@ -328,22 +267,18 @@
 
   function pollDomAdState() {
     try {
-      if (hasAdDomSignal()) {
-        markAd(location.href, 'dom');
-      }
+      if (hasAdDomSignal()) markAd(location.href, 'dom');
     } catch {}
   }
 
   try {
     const observer = new MutationObserver(pollDomAdState);
-
     observer.observe(document.documentElement, {
       subtree: true,
       childList: true,
       characterData: true,
       attributes: true
     });
-
     setInterval(pollDomAdState, 250);
   } catch {}
 })();
