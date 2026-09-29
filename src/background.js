@@ -257,13 +257,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === 'prepare-backup') {
     (async () => {
-      if (!sender.tab?.id) return { ok: false, reason: 'no-tab' };
+      if (!message.twitchTabId) return { ok: false, reason: 'no-twitch-tab-id' };
+
+      let twitchTab;
+      try {
+        twitchTab = await chrome.tabs.get(message.twitchTabId);
+      } catch {
+        return { ok: false, reason: 'twitch-tab-missing' };
+      }
+
       const settings = await getSettings();
       const target = normalizeYoutubeVideoUrl(settings.youtubeVideoUrl);
       if (!target) return { ok: false, reason: 'invalid-youtube-video-url' };
 
-      const backup = await ensureBackupTab(sender.tab, { force: true });
-      const state = tabState.get(sender.tab.id) || {};
+      const backup = await ensureBackupTab(twitchTab, { force: true });
+      const state = tabState.get(twitchTab.id) || {};
       return {
         ok: Boolean(backup?.id && state.backupReady),
         tabId: backup?.id || null,
@@ -276,8 +284,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === 'simulate-ad') {
     (async () => {
-      if (!sender.tab?.id) return { ok: false, reason: 'no-tab' };
-      return handleAdState({ tab: sender.tab, active: true, simulated: true });
+      if (!message.twitchTabId) return { ok: false, reason: 'no-twitch-tab-id' };
+
+      let twitchTab;
+      try {
+        twitchTab = await chrome.tabs.get(message.twitchTabId);
+      } catch {
+        return { ok: false, reason: 'twitch-tab-missing' };
+      }
+
+      return handleAdState({ tab: twitchTab, active: true, simulated: true });
     })().then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'error' }));
     return true;
   }
