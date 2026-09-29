@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "StreamSwitch",
-  "version": "0.2.0",
-  "description": "Switch from a Twitch live stream to a configured YouTube backup while Twitch is showing an ad.",
+  "version": "0.3.0",
+  "description": "Switch from a Twitch live stream to a configured YouTube live video while Twitch is showing an ad.",
   "permissions": [
     "storage",
     "tabs"
