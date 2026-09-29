@@ -314,7 +314,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         tabState.set(twitchTabId, state);
         await persistState();
 
-        if (!message.isLive && Number.isFinite(state.youtubePosition) && state.youtubePosition > 0) {
+        if (message.isLive) {
+          await sendYoutubeMessage(youtubeTabId, {
+            type: 'streambridge-go-live'
+          });
+        } else if (Number.isFinite(state.youtubePosition) && state.youtubePosition > 0) {
           await sendYoutubeMessage(youtubeTabId, {
             type: 'streambridge-seek',
             time: state.youtubePosition
